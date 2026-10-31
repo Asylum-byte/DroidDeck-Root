@@ -171,6 +171,9 @@ class FrontEndActivity : ComponentActivity() {
     private var zramClient by mutableStateOf(true)
     private var vramCapMb by mutableStateOf(0)
     private var gpuClockPin by mutableStateOf(false)
+    private var rootPerfProfile by mutableStateOf(com.droiddeck.launcher.session.RootPerfProfile.OFF)
+    private var rootFanMax by mutableStateOf(false)
+    private var rootAutoPhantom by mutableStateOf(true)
     private var prootNoSeccomp by mutableStateOf(false)
     private var prootFastPath by mutableStateOf(true)
     private var cursorComposite by mutableStateOf(false)
@@ -1667,6 +1670,11 @@ class FrontEndActivity : ComponentActivity() {
         launcherOrientation = com.droiddeck.launcher.core.AppUiPrefs.orientation(this)
         requestedOrientation = launcherOrientation
         SteamIntegration.syncShortcutsListing(this)
+        if (PhantomProcessLimit.blocksSteam(PhantomProcessLimit.read(this)) && SessionPrefs.rootAutoPhantom(this)) {
+            Thread({
+                if (PhantomProcessLimit.disableWithRootIfNeeded(this)) runOnUiThread { refreshPhantomStatus() }
+            }, "root-phantom").start()
+        }
         refreshWifiDiscovery()
         com.droiddeck.launcher.stores.StoresState.refresh(this)
         com.droiddeck.launcher.stores.StoresState.libraryListener = { refreshAddedGames(); refresh() }
@@ -2242,6 +2250,7 @@ class FrontEndActivity : ComponentActivity() {
             fsyncFirst = fsyncFirst,
             gamescopeRealtime = gamescopeRealtime,
             gpuClockPin = gpuClockPin,
+            rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom,
             ramCapMb = ramCapMb, vramCapMb = vramCapMb, zramClient = zramClient,
             deviceRamMb = (android.app.ActivityManager.MemoryInfo()
                 .also((getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager)::getMemoryInfo).totalMem / (1024 * 1024)).toInt(),
@@ -2259,6 +2268,14 @@ class FrontEndActivity : ComponentActivity() {
             onFsyncFirst = { on -> SessionPrefs.setFsyncFirst(this, on); fsyncFirst = on },
             onGamescopeRealtime = { on -> SessionPrefs.setGamescopeRealtime(this, on); gamescopeRealtime = on },
             onGpuClockPin = { on -> SessionPrefs.setGpuClockPin(this, on); gpuClockPin = on },
+            onRootPerfProfile = { p -> SessionPrefs.setRootPerfProfile(this, p); rootPerfProfile = p },
+            onRootFanMax = { on -> SessionPrefs.setRootFanMax(this, on); rootFanMax = on },
+            onRootAutoPhantom = { on ->
+                SessionPrefs.setRootAutoPhantom(this, on); rootAutoPhantom = on
+                if (on) Thread({
+                    if (PhantomProcessLimit.disableWithRootIfNeeded(this)) runOnUiThread { refreshPhantomStatus() }
+                }, "root-phantom").start()
+            },
             onRamCapMb = { mb -> SessionPrefs.setRamCapMb(this, mb); ramCapMb = mb },
             onZramClient = { on -> SessionPrefs.setZramClient(this, on); zramClient = on },
             onVramCapMb = { mb -> SessionPrefs.setVramCapMb(this, mb); vramCapMb = mb },
@@ -2475,6 +2492,9 @@ class FrontEndActivity : ComponentActivity() {
         zramClient = SessionPrefs.zramClient(this)
         vramCapMb = SessionPrefs.vramCapMb(this)
         gpuClockPin = SessionPrefs.gpuClockPin(this)
+        rootPerfProfile = SessionPrefs.rootPerfProfile(this)
+        rootFanMax = SessionPrefs.rootFanMax(this)
+        rootAutoPhantom = SessionPrefs.rootAutoPhantom(this)
         prootNoSeccomp = SessionPrefs.prootNoSeccomp(this)
         prootFastPath = SessionPrefs.prootFastPath(this)
         cursorComposite = SessionPrefs.cursorComposite(this)
@@ -2622,6 +2642,8 @@ class FrontEndActivity : ComponentActivity() {
             return false
         }
         refreshPhantomStatus()
+        if (PhantomProcessLimit.blocksSteam(phantomProcessStatus) && com.droiddeck.launcher.core.RootShell.known() &&
+            PhantomProcessLimit.disableWithRootIfNeeded(this)) refreshPhantomStatus()
         if (steamSession && PhantomProcessLimit.blocksSteam(phantomProcessStatus)) {
             showPhantomGate = true
             return false

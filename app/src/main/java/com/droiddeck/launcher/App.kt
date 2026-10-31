@@ -47,6 +47,10 @@ class App : Application() {
         com.droiddeck.launcher.core.DownloadSource.init(this)
         prefetchAddonPacks()
         GpuClockPin.clearLeftover(this)
+        Thread({
+            runCatching { com.droiddeck.launcher.session.RootPerfProfile.clearLeftover(this) }
+            runCatching { com.droiddeck.launcher.core.PhantomProcessLimit.disableWithRootIfNeeded(this) }
+        }, "root-startup").start()
         com.droiddeck.launcher.glasses.Glasses.init(this)
         com.droiddeck.launcher.glasses.GlassesMenuMirror.initialize(this)
         BwrapSpawner.start(this)

@@ -498,6 +498,7 @@ class SessionService : Service() {
             .onFailure { Log.w(TAG, "could not write the proot line to ${sessionLog.path}", it) }
 
         Log.i(TAG, GpuClockPin.start(this))
+        Thread({ Log.i(TAG, RootPerfProfile.start(this)) }, "root-perf-start").start()
         Log.i(TAG, GameThreadHints.start(this))
 
         val size = SessionState.outputSize
@@ -1810,6 +1811,7 @@ class SessionService : Service() {
             SessionState.program == NoSteamLaunch.BATTLENET
         SessionState.stopRequested = false
         GpuClockPin.stop(this)
+        Thread({ RootPerfProfile.stop(this) }, "root-perf-stop").start()
         GameThreadHints.stop()
         suspendOperationPending = false
         freezePending = false

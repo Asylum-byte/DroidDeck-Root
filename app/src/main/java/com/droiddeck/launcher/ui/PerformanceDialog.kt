@@ -46,6 +46,9 @@ fun PerformancePage(
     fsyncFirst: Boolean,
     gamescopeRealtime: Boolean,
     gpuClockPin: Boolean,
+    rootPerfProfile: String,
+    rootFanMax: Boolean,
+    rootAutoPhantom: Boolean,
     ramCapMb: Int,
     zramClient: Boolean,
     vramCapMb: Int,
@@ -67,6 +70,9 @@ fun PerformancePage(
     onFsyncFirst: (Boolean) -> Unit,
     onGamescopeRealtime: (Boolean) -> Unit,
     onGpuClockPin: (Boolean) -> Unit,
+    onRootPerfProfile: (String) -> Unit,
+    onRootFanMax: (Boolean) -> Unit,
+    onRootAutoPhantom: (Boolean) -> Unit,
     onRamCapMb: (Int) -> Unit,
     onZramClient: (Boolean) -> Unit,
     onVramCapMb: (Int) -> Unit,
@@ -131,6 +137,28 @@ fun PerformancePage(
                 host, "gpuclock", stringResource(R.string.perf_gpuclock),
                 stringResource(R.string.perf_gpuclock_hint),
                 gpuClockPin, onChange = onGpuClockPin,
+            )
+        }
+        SettingsGroup(stringResource(R.string.perf_root)) {
+            ChoiceRow(
+                host, "rootprofile", stringResource(R.string.perf_root_profile),
+                stringResource(R.string.perf_root_profile_hint),
+                listOf(
+                    com.droiddeck.launcher.session.RootPerfProfile.OFF to stringResource(R.string.perf_root_profile_off),
+                    com.droiddeck.launcher.session.RootPerfProfile.EFFICIENT to stringResource(R.string.perf_root_profile_efficient),
+                    com.droiddeck.launcher.session.RootPerfProfile.PERFORMANCE to stringResource(R.string.perf_root_profile_performance),
+                ),
+                rootPerfProfile, onPick = onRootPerfProfile,
+            )
+            ToggleRow(
+                host, "rootfan", stringResource(R.string.perf_root_fan),
+                stringResource(R.string.perf_root_fan_hint),
+                rootFanMax, onChange = onRootFanMax,
+            )
+            ToggleRow(
+                host, "rootphantom", stringResource(R.string.perf_root_phantom),
+                stringResource(R.string.perf_root_phantom_hint),
+                rootAutoPhantom, onChange = onRootAutoPhantom,
             )
         }
         SettingsGroup(stringResource(R.string.perf_memory)) {

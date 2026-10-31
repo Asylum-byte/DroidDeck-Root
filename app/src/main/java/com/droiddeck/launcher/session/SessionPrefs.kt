@@ -624,6 +624,25 @@ object SessionPrefs {
         prefs(context).edit().putBoolean("prootNoSeccomp", on).apply()
     }
 
+    fun rootAutoPhantom(context: Context): Boolean = prefs(context).getBoolean("rootAutoPhantom", true)
+
+    fun setRootAutoPhantom(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("rootAutoPhantom", on).apply()
+    }
+
+    fun rootPerfProfile(context: Context): String =
+        prefs(context).getString("rootPerfProfile", RootPerfProfile.OFF) ?: RootPerfProfile.OFF
+
+    fun setRootPerfProfile(context: Context, profile: String) {
+        prefs(context).edit().putString("rootPerfProfile", profile).apply()
+    }
+
+    fun rootFanMax(context: Context): Boolean = prefs(context).getBoolean("rootFanMax", false)
+
+    fun setRootFanMax(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("rootFanMax", on).apply()
+    }
+
     fun prootFastPath(context: Context): Boolean = prefs(context).getBoolean("prootFastPath", true)
 
     fun setProotFastPath(context: Context, on: Boolean) {

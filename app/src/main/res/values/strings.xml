@@ -610,6 +610,16 @@
     <string name="perf_vram_cap_hint">The video memory DXVK reports to Direct3D games, so they budget textures for less. A game\'s own DXVK settings still win. Takes effect at the next session.</string>
     <string name="perf_gpuclock">Hold the GPU at its top clock</string>
     <string name="perf_gpuclock_hint">Adreno only. Fewer hitches, more battery use and heat.</string>
+    <string name="perf_root">Root</string>
+    <string name="perf_root_profile">CPU and GPU profile</string>
+    <string name="perf_root_profile_hint">Needs root. Applied while a session runs and undone when it ends.</string>
+    <string name="perf_root_profile_off">System default</string>
+    <string name="perf_root_profile_efficient">Efficient (about 75% clock cap)</string>
+    <string name="perf_root_profile_performance">Performance (clocks held at the top)</string>
+    <string name="perf_root_fan">Built-in fan at full speed</string>
+    <string name="perf_root_fan_hint">Needs root. RedMagic and other Nubia phones with a fan. Turned back when the session ends.</string>
+    <string name="perf_root_phantom">Turn off child process restrictions with root</string>
+    <string name="perf_root_phantom_hint">Sets the Android limit for you through su, so no adb or developer options are needed.</string>
     <string name="perf_fixes">Session fixes</string>
     <string name="perf_sysmem">Turnip: sysmem rendering</string>
     <string name="perf_sysmem_hint">Faster for the Steam client; in games the driver picks tile or system-memory rendering per pass. Required on Adreno 710/720/722.</string>

@@ -586,6 +586,16 @@
     <string name="perf_vram_cap_hint">Der Grafikspeicher, den DXVK an Direct3D-Spiele meldet, damit sie weniger für Texturen einplanen. Eigene DXVK-Einstellungen eines Spiels haben Vorrang. Gilt ab der nächsten Sitzung.</string>
     <string name="perf_gpuclock">GPU auf höchstem Takt halten</string>
     <string name="perf_gpuclock_hint">Nur Adreno. Weniger Ruckler, mehr Akkuverbrauch und Wärme.</string>
+    <string name="perf_root">Root</string>
+    <string name="perf_root_profile">CPU- und GPU-Profil</string>
+    <string name="perf_root_profile_hint">Braucht Root. Gilt, solange eine Sitzung läuft, und wird danach zurückgesetzt.</string>
+    <string name="perf_root_profile_off">Systemstandard</string>
+    <string name="perf_root_profile_efficient">Sparsam (Takt auf ca. 75 % begrenzt)</string>
+    <string name="perf_root_profile_performance">Leistung (Takt dauerhaft am Maximum)</string>
+    <string name="perf_root_fan">Eingebauten Lüfter auf volle Stufe</string>
+    <string name="perf_root_fan_hint">Braucht Root. RedMagic und andere Nubia-Handys mit Lüfter. Wird nach der Sitzung zurückgesetzt.</string>
+    <string name="perf_root_phantom">Child-Process-Restrictions per Root abschalten</string>
+    <string name="perf_root_phantom_hint">Setzt das Android-Limit automatisch über su, ganz ohne adb oder Entwickleroptionen.</string>
     <string name="perf_fixes">Sitzungskorrekturen</string>
     <string name="perf_sysmem">Turnip: Sysmem-Rendering</string>
     <string name="perf_sysmem_hint">Schneller für den Steam-Client; in Spielen wählt der Treiber pro Durchgang zwischen Kachel- und Systemspeicher-Rendering. Erforderlich bei Adreno 710/720/722.</string>

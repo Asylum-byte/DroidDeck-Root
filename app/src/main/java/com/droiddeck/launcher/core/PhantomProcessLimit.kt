@@ -51,6 +51,22 @@ object PhantomProcessLimit {
 
     fun adbCommand(): String = adbCommand(false)
 
+    /** Applies the same settings the adb command would, through su. Blocks; never call on the main thread unless [RootShell.known]. */
+    fun disableWithRoot(context: Context, sdk: Int = Build.VERSION.SDK_INT): Boolean {
+        if (sdk < Build.VERSION_CODES.S || !RootShell.available()) return false
+        val result = RootShell.run(shellCommands(false, sdk) + verifyCommand(sdk))
+        val ok = verified(result.lastLine, false, sdk)
+        if (ok && usesDeviceConfig(sdk)) rememberAndroid12(context, true)
+        android.util.Log.i("PhantomProcessLimit", if (ok) "disabled with root" else "root fix failed: ${result.output.trim()}")
+        return ok
+    }
+
+    fun disableWithRootIfNeeded(context: Context): Boolean {
+        if (!com.droiddeck.launcher.session.SessionPrefs.rootAutoPhantom(context)) return false
+        if (!blocksSteam(read(context))) return false
+        return disableWithRoot(context)
+    }
+
     fun rememberAndroid12(context: Context, off: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(PREF_ANDROID_12_OFF, off).apply()
     }
