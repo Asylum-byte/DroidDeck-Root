@@ -171,7 +171,9 @@ public final class LinuxRuntime {
 
     public static List<String> prootPrefix(Context context, File root, String cwd, boolean fakeRoot) {
         List<String> cmd = new ArrayList<>();
-        cmd.add(prootBinary(context).getPath());
+        // The chroot launcher takes the same options; fake root keeps proot so the rootfs never gains root-owned files.
+        boolean chroot = !fakeRoot && ChrootMode.active(context);
+        cmd.add(chroot ? ChrootMode.INSTANCE.binary(context).getPath() : prootBinary(context).getPath());
         cmd.add("--kill-on-exit");
         cmd.add("--kernel-release=" + guestUtsname(SessionPrefs.guestHostname(context)));
         int uid = Process.myUid();

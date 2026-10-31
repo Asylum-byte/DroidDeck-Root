@@ -492,7 +492,8 @@ class SessionService : Service() {
             return
         }
         val sessionLog = File(sessionDir, "session.log")
-        val prootLine = "== proot: ${LinuxRuntime.prootBinary(this).path} (${LinuxRuntime.prootSource(this)})"
+        val prootLine = if (com.droiddeck.launcher.runtime.ChrootMode.active(this)) "== chroot: ${com.droiddeck.launcher.runtime.ChrootMode.binary(this).path} (root, proot kept for fake-root commands)"
+            else "== proot: ${LinuxRuntime.prootBinary(this).path} (${LinuxRuntime.prootSource(this)})"
         Log.i(TAG, prootLine)
         runCatching { sessionLog.appendText(prootLine + "\n") }
             .onFailure { Log.w(TAG, "could not write the proot line to ${sessionLog.path}", it) }

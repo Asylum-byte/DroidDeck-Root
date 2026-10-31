@@ -637,6 +637,12 @@ object SessionPrefs {
         prefs(context).edit().putString("rootPerfProfile", profile).apply()
     }
 
+    fun rootChroot(context: Context): Boolean = prefs(context).getBoolean("rootChroot", false)
+
+    fun setRootChroot(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("rootChroot", on).apply()
+    }
+
     fun rootFanMax(context: Context): Boolean = prefs(context).getBoolean("rootFanMax", false)
 
     fun setRootFanMax(context: Context, on: Boolean) {

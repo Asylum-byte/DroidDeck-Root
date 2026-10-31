@@ -49,6 +49,7 @@ fun PerformancePage(
     rootPerfProfile: String,
     rootFanMax: Boolean,
     rootAutoPhantom: Boolean,
+    rootChroot: Boolean,
     ramCapMb: Int,
     zramClient: Boolean,
     vramCapMb: Int,
@@ -73,6 +74,7 @@ fun PerformancePage(
     onRootPerfProfile: (String) -> Unit,
     onRootFanMax: (Boolean) -> Unit,
     onRootAutoPhantom: (Boolean) -> Unit,
+    onRootChroot: (Boolean) -> Unit,
     onRamCapMb: (Int) -> Unit,
     onZramClient: (Boolean) -> Unit,
     onVramCapMb: (Int) -> Unit,
@@ -159,6 +161,11 @@ fun PerformancePage(
                 host, "rootphantom", stringResource(R.string.perf_root_phantom),
                 stringResource(R.string.perf_root_phantom_hint),
                 rootAutoPhantom, onChange = onRootAutoPhantom,
+            )
+            ToggleRow(
+                host, "rootchroot", stringResource(R.string.perf_root_chroot),
+                stringResource(R.string.perf_root_chroot_hint),
+                rootChroot, onChange = onRootChroot,
             )
         }
         SettingsGroup(stringResource(R.string.perf_memory)) {

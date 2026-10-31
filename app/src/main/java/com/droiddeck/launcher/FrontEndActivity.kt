@@ -174,6 +174,7 @@ class FrontEndActivity : ComponentActivity() {
     private var rootPerfProfile by mutableStateOf(com.droiddeck.launcher.session.RootPerfProfile.OFF)
     private var rootFanMax by mutableStateOf(false)
     private var rootAutoPhantom by mutableStateOf(true)
+    private var rootChroot by mutableStateOf(false)
     private var prootNoSeccomp by mutableStateOf(false)
     private var prootFastPath by mutableStateOf(true)
     private var cursorComposite by mutableStateOf(false)
@@ -2250,7 +2251,7 @@ class FrontEndActivity : ComponentActivity() {
             fsyncFirst = fsyncFirst,
             gamescopeRealtime = gamescopeRealtime,
             gpuClockPin = gpuClockPin,
-            rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom,
+            rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom, rootChroot = rootChroot,
             ramCapMb = ramCapMb, vramCapMb = vramCapMb, zramClient = zramClient,
             deviceRamMb = (android.app.ActivityManager.MemoryInfo()
                 .also((getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager)::getMemoryInfo).totalMem / (1024 * 1024)).toInt(),
@@ -2275,6 +2276,10 @@ class FrontEndActivity : ComponentActivity() {
                 if (on) Thread({
                     if (PhantomProcessLimit.disableWithRootIfNeeded(this)) runOnUiThread { refreshPhantomStatus() }
                 }, "root-phantom").start()
+            },
+            onRootChroot = { on ->
+                SessionPrefs.setRootChroot(this, on); rootChroot = on
+                if (on) Thread({ com.droiddeck.launcher.runtime.ChrootMode.prepare(this) }, "root-chroot").start()
             },
             onRamCapMb = { mb -> SessionPrefs.setRamCapMb(this, mb); ramCapMb = mb },
             onZramClient = { on -> SessionPrefs.setZramClient(this, on); zramClient = on },
@@ -2495,6 +2500,7 @@ class FrontEndActivity : ComponentActivity() {
         rootPerfProfile = SessionPrefs.rootPerfProfile(this)
         rootFanMax = SessionPrefs.rootFanMax(this)
         rootAutoPhantom = SessionPrefs.rootAutoPhantom(this)
+        rootChroot = SessionPrefs.rootChroot(this)
         prootNoSeccomp = SessionPrefs.prootNoSeccomp(this)
         prootFastPath = SessionPrefs.prootFastPath(this)
         cursorComposite = SessionPrefs.cursorComposite(this)

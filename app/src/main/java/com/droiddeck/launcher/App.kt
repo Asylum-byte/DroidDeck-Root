@@ -48,6 +48,7 @@ class App : Application() {
         prefetchAddonPacks()
         GpuClockPin.clearLeftover(this)
         Thread({
+            runCatching { com.droiddeck.launcher.runtime.ChrootMode.prepare(this) }
             runCatching { com.droiddeck.launcher.session.RootPerfProfile.clearLeftover(this) }
             runCatching { com.droiddeck.launcher.core.PhantomProcessLimit.disableWithRootIfNeeded(this) }
         }, "root-startup").start()

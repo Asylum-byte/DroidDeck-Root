@@ -20,6 +20,7 @@ object ProotFastPath {
         preference && !noSeccomp && source == LinuxRuntime.PROOT_PACK
 
     fun enabled(context: Context): Boolean {
+        if (ChrootMode.active(context)) return false
         val preference = SessionPrefs.prootFastPath(context)
         val noSeccomp = SessionPrefs.prootNoSeccomp(context)
         val source = LinuxRuntime.prootSource(context)
