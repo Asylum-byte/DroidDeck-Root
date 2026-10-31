@@ -38,24 +38,38 @@ static gid_t groups[MAX_GROUPS];
 static int ngroups;
 static int verbose;
 
+// DroidDeck discards the launcher's own output, so messages also go to the file named by DDCHROOT_LOG.
+static int log_fd = -1;
+
+static void open_log(void) {
+    const char *path = getenv("DDCHROOT_LOG");
+    if (log_fd < 0 && path && *path) log_fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
+}
+
+static void emit(int to_stderr, const char *fmt, va_list ap, int err) {
+    char msg[1024];
+    int n = snprintf(msg, sizeof msg, "ddchroot[%d]: ", (int) getpid());
+    n += vsnprintf(msg + n, sizeof msg - (size_t) n, fmt, ap);
+    if (err && n < (int) sizeof msg) n += snprintf(msg + n, sizeof msg - (size_t) n, ": %s", strerror(err));
+    if (n >= (int) sizeof msg - 1) n = (int) sizeof msg - 2;
+    msg[n++] = '\n';
+    if (to_stderr) (void) !write(2, msg, (size_t) n);
+    if (log_fd >= 0) (void) !write(log_fd, msg, (size_t) n);
+}
+
 static void die(const char *fmt, ...) {
+    int err = errno;
     va_list ap;
     va_start(ap, fmt);
-    fputs("ddchroot: ", stderr);
-    vfprintf(stderr, fmt, ap);
-    if (errno) fprintf(stderr, ": %s", strerror(errno));
-    fputc('\n', stderr);
+    emit(1, fmt, ap, err);
     va_end(ap);
     _exit(126);
 }
 
 static void note(const char *fmt, ...) {
-    if (!verbose) return;
     va_list ap;
     va_start(ap, fmt);
-    fputs("ddchroot: ", stderr);
-    vfprintf(stderr, fmt, ap);
-    fputc('\n', stderr);
+    emit(verbose, fmt, ap, 0);
     va_end(ap);
 }
 
@@ -171,6 +185,7 @@ static void become_root(int argc, char **argv) {
     char cmd[PATH_MAX + 64];
     snprintf(cmd, sizeof cmd, "exec '%s' --ddchroot-state %d", self, fd);
     static const char *su[] = {"/system/bin/su", "/system/xbin/su", "/debug_ramdisk/su", "/sbin/su", NULL};
+    note("asking su for root");
     for (int k = 0; su[k]; k++) execl(su[k], "su", "-c", cmd, (char *) NULL);
     die("cannot run su");
 }
@@ -343,14 +358,20 @@ static int guest_init(void) {
     for (;;) {
         int status;
         pid_t pid = waitpid(-1, &status, 0);
-        if (pid == child) return exit_code(status);
+        if (pid == child) {
+            if (exit_code(status)) note("%s exited with status %d", guest_argv[0], exit_code(status));
+            return exit_code(status);
+        }
         if (pid < 0 && errno == ECHILD) return 1;
     }
 }
 
 int main(int argc, char **argv) {
+    open_log();
     if (argc >= 3 && !strcmp(argv[1], "--ddchroot-state")) {
         argv = load_state(atoi(argv[2]), &argc);
+        open_log();
+        note("root stage running as uid %d", (int) geteuid());
     } else if (getuid() != 0) {
         become_root(argc, argv);
     }
@@ -359,6 +380,7 @@ int main(int argc, char **argv) {
     if (!target_uid && !target_gid) { errno = 0; die("refusing to run the guest as root"); }
 
     if (unshare(CLONE_NEWNS | CLONE_NEWPID) != 0) die("unshare");
+    note("rootfs %s, %d binds, guest %s as %d:%d", opt_root, nbinds, guest_argv[0], (int) target_uid, (int) target_gid);
     pid_t init = fork();
     if (init < 0) die("fork");
     if (init == 0) _exit(guest_init());
@@ -374,7 +396,10 @@ int main(int argc, char **argv) {
     for (;;) {
         int status;
         pid_t pid = waitpid(init, &status, 0);
-        if (pid == init) return exit_code(status);
-        if (pid < 0 && errno != EINTR) return 1;
+        if (pid == init) {
+            note("guest finished with status %d", exit_code(status));
+            return exit_code(status);
+        }
+        if (pid < 0 && errno != EINTR) { note("lost the guest: %s", strerror(errno)); return 1; }
     }
 }

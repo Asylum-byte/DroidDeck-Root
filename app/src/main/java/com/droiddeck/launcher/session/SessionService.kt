@@ -622,6 +622,7 @@ class SessionService : Service() {
         val hostEnv = HostEnvironment()
         hostEnv["PROOT_LOADER"] = LinuxRuntime.prootLoader(this).path
         hostEnv["PROOT_TMP_DIR"] = LinuxRuntime.prootTempDir(this).path
+        if (com.droiddeck.launcher.runtime.ChrootMode.active(this)) hostEnv["DDCHROOT_LOG"] = sessionLog.path
         if (SessionPrefs.prootNoSeccomp(this)) {
             hostEnv["PROOT_NO_SECCOMP"] = "1"
             Log.i(TAG, "proot: seccomp acceleration off by request")
