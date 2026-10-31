@@ -500,6 +500,7 @@ class SessionService : Service() {
 
         Log.i(TAG, GpuClockPin.start(this))
         Thread({ Log.i(TAG, RootPerfProfile.start(this)) }, "root-perf-start").start()
+        Thread({ Log.i(TAG, RootGameBoost.start(this)) }, "root-boost-start").start()
         Log.i(TAG, GameThreadHints.start(this))
 
         val size = SessionState.outputSize
@@ -1814,6 +1815,7 @@ class SessionService : Service() {
         SessionState.stopRequested = false
         GpuClockPin.stop(this)
         Thread({ RootPerfProfile.stop(this) }, "root-perf-stop").start()
+        Thread({ RootGameBoost.stop(this) }, "root-boost-stop").start()
         GameThreadHints.stop()
         suspendOperationPending = false
         freezePending = false

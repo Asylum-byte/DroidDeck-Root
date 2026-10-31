@@ -50,6 +50,7 @@ fun PerformancePage(
     rootFanMax: Boolean,
     rootAutoPhantom: Boolean,
     rootChroot: Boolean,
+    rootGameBoost: Int,
     ramCapMb: Int,
     zramClient: Boolean,
     vramCapMb: Int,
@@ -75,6 +76,7 @@ fun PerformancePage(
     onRootFanMax: (Boolean) -> Unit,
     onRootAutoPhantom: (Boolean) -> Unit,
     onRootChroot: (Boolean) -> Unit,
+    onRootGameBoost: (Int) -> Unit,
     onRamCapMb: (Int) -> Unit,
     onZramClient: (Boolean) -> Unit,
     onVramCapMb: (Int) -> Unit,
@@ -151,6 +153,14 @@ fun PerformancePage(
                     com.droiddeck.launcher.session.RootPerfProfile.PERFORMANCE to stringResource(R.string.perf_root_profile_performance),
                 ),
                 rootPerfProfile, onPick = onRootPerfProfile,
+            )
+            ChoiceRow(
+                host, "rootboost", stringResource(R.string.perf_root_boost),
+                stringResource(R.string.perf_root_boost_hint),
+                com.droiddeck.launcher.session.RootGameBoost.LEVELS.map { level ->
+                    level to if (level == 0) stringResource(R.string.perf_root_boost_off) else stringResource(R.string.perf_root_boost_level, level)
+                },
+                rootGameBoost, onPick = onRootGameBoost,
             )
             ToggleRow(
                 host, "rootfan", stringResource(R.string.perf_root_fan),

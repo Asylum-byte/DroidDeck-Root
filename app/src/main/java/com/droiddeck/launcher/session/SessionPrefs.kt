@@ -637,6 +637,12 @@ object SessionPrefs {
         prefs(context).edit().putString("rootPerfProfile", profile).apply()
     }
 
+    fun rootGameBoost(context: Context): Int = prefs(context).getInt("rootGameBoost", 0)
+
+    fun setRootGameBoost(context: Context, percent: Int) {
+        prefs(context).edit().putInt("rootGameBoost", percent).apply()
+    }
+
     fun rootChroot(context: Context): Boolean = prefs(context).getBoolean("rootChroot", false)
 
     fun setRootChroot(context: Context, on: Boolean) {

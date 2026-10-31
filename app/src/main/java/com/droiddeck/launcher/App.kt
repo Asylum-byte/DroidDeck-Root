@@ -50,6 +50,7 @@ class App : Application() {
         Thread({
             runCatching { com.droiddeck.launcher.runtime.ChrootMode.prepare(this) }
             runCatching { com.droiddeck.launcher.session.RootPerfProfile.clearLeftover(this) }
+            runCatching { com.droiddeck.launcher.session.RootGameBoost.clearLeftover(this) }
             runCatching { com.droiddeck.launcher.core.PhantomProcessLimit.disableWithRootIfNeeded(this) }
         }, "root-startup").start()
         com.droiddeck.launcher.glasses.Glasses.init(this)

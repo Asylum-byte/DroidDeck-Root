@@ -594,6 +594,10 @@
     <string name="perf_root_profile_performance">Leistung (Takt dauerhaft am Maximum)</string>
     <string name="perf_root_chroot">Linux-Runtime per chroot starten (experimentell)</string>
     <string name="perf_root_chroot_hint">Braucht Root (KernelSU oder APatch). Startet Steam und Spiele ohne proot, mit weniger Overhead. Paket-Installationen laufen weiter über proot. Abschalten, falls eine Sitzung nicht startet.</string>
+    <string name="perf_root_boost">CPU-Boost für Spiele</string>
+    <string name="perf_root_boost_hint">Braucht Root. Gibt den Linux-Prozessen der Sitzung eine Mindestleistung, damit sie auf schnellen Kernen landen und der Takt früher steigt. Schont den Akku mehr als ein dauerhaft maximaler Takt.</string>
+    <string name="perf_root_boost_off">Aus</string>
+    <string name="perf_root_boost_level">mindestens %1$d %%</string>
     <string name="perf_root_fan">Eingebauten Lüfter auf volle Stufe</string>
     <string name="perf_root_fan_hint">Braucht Root. RedMagic und andere Nubia-Handys mit Lüfter. Wird nach der Sitzung zurückgesetzt.</string>
     <string name="perf_root_phantom">Child-Process-Restrictions per Root abschalten</string>

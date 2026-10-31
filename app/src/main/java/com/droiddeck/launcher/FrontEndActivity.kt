@@ -175,6 +175,7 @@ class FrontEndActivity : ComponentActivity() {
     private var rootFanMax by mutableStateOf(false)
     private var rootAutoPhantom by mutableStateOf(true)
     private var rootChroot by mutableStateOf(false)
+    private var rootGameBoost by mutableStateOf(0)
     private var prootNoSeccomp by mutableStateOf(false)
     private var prootFastPath by mutableStateOf(true)
     private var cursorComposite by mutableStateOf(false)
@@ -2251,7 +2252,7 @@ class FrontEndActivity : ComponentActivity() {
             fsyncFirst = fsyncFirst,
             gamescopeRealtime = gamescopeRealtime,
             gpuClockPin = gpuClockPin,
-            rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom, rootChroot = rootChroot,
+            rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom, rootChroot = rootChroot, rootGameBoost = rootGameBoost,
             ramCapMb = ramCapMb, vramCapMb = vramCapMb, zramClient = zramClient,
             deviceRamMb = (android.app.ActivityManager.MemoryInfo()
                 .also((getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager)::getMemoryInfo).totalMem / (1024 * 1024)).toInt(),
@@ -2277,6 +2278,7 @@ class FrontEndActivity : ComponentActivity() {
                     if (PhantomProcessLimit.disableWithRootIfNeeded(this)) runOnUiThread { refreshPhantomStatus() }
                 }, "root-phantom").start()
             },
+            onRootGameBoost = { level -> SessionPrefs.setRootGameBoost(this, level); rootGameBoost = level },
             onRootChroot = { on ->
                 SessionPrefs.setRootChroot(this, on); rootChroot = on
                 if (on) Thread({ com.droiddeck.launcher.runtime.ChrootMode.prepare(this) }, "root-chroot").start()
@@ -2501,6 +2503,7 @@ class FrontEndActivity : ComponentActivity() {
         rootFanMax = SessionPrefs.rootFanMax(this)
         rootAutoPhantom = SessionPrefs.rootAutoPhantom(this)
         rootChroot = SessionPrefs.rootChroot(this)
+        rootGameBoost = SessionPrefs.rootGameBoost(this)
         prootNoSeccomp = SessionPrefs.prootNoSeccomp(this)
         prootFastPath = SessionPrefs.prootFastPath(this)
         cursorComposite = SessionPrefs.cursorComposite(this)
