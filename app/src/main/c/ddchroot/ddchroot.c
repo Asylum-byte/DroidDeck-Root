@@ -20,6 +20,7 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/sysmacros.h>
 #include <unistd.h>
 
 #define MAX_BINDS 512
@@ -190,6 +191,29 @@ static void become_root(int argc, char **argv) {
     die("cannot run su");
 }
 
+static void mirror(const char *from, const char *to, int skip_stdio);
+
+/* sysfs and debugfs refuse new entries; covering the directory with a mirrored tmpfs makes room for them. */
+static int shadow_dir(const char *dir) {
+    int fd = open(dir, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    if (mount("tmpfs", dir, "tmpfs", MS_NOSUID, "mode=755") != 0) { close(fd); return -1; }
+    char below[64];
+    snprintf(below, sizeof below, "/proc/self/fd/%d", fd);
+    mirror(below, dir, 0);
+    close(fd);
+    note("shadowed %s to add entries", dir);
+    return 0;
+}
+
+static int create_entry(const char *path, int dir) {
+    if (dir) return mkdir(path, 0755) == 0 || errno == EEXIST ? 0 : -1;
+    int fd = open(path, O_CREAT | O_WRONLY | O_CLOEXEC, 0644);
+    if (fd < 0) return -1;
+    close(fd);
+    return 0;
+}
+
 /* Resolves path inside root the way the guest would see it, creating what is missing. */
 static int resolve(const char *root, const char *guest, int want_dir, char *out) {
     char work[PATH_MAX], rest[PATH_MAX];
@@ -230,12 +254,12 @@ static int resolve(const char *root, const char *guest, int want_dir, char *out)
             continue;
         }
         if (lstat(work, &st) != 0) {
-            if (!last || want_dir) {
-                if (mkdir(work, 0755) != 0 && errno != EEXIST) return -1;
-            } else {
-                int fd = open(work, O_CREAT | O_WRONLY | O_CLOEXEC, 0644);
-                if (fd < 0) return -1;
-                close(fd);
+            int dir = !last || want_dir;
+            if (create_entry(work, dir) != 0) {
+                work[len] = 0;
+                int shadowed = shadow_dir(work) == 0;
+                work[len] = '/';
+                if (!shadowed || create_entry(work, dir) != 0) return -1;
             }
             // Mount points land in the app's own rootfs, so the app must still be able to delete them.
             (void) !lchown(work, target_uid, target_gid);
@@ -255,18 +279,18 @@ static void bind_path(const char *src, const char *guest_dst) {
     if (mount(src, dst, NULL, flags, NULL) != 0) note("bind %s -> %s failed: %s", src, dst, strerror(errno));
 }
 
-static void populate_dev(const char *dev) {
-    if (mount("tmpfs", dev, "tmpfs", MS_NOSUID, "mode=755") != 0) die("tmpfs on %s", dev);
-    DIR *d = opendir("/dev");
-    if (!d) die("opendir /dev");
+/* Recreates every entry of from inside the tmpfs at to, binding each one back to the original. */
+static void mirror(const char *from, const char *to, int skip_stdio) {
+    DIR *d = opendir(from);
+    if (!d) { note("cannot list %s: %s", from, strerror(errno)); return; }
     struct dirent *e;
     char src[PATH_MAX], dst[PATH_MAX];
     while ((e = readdir(d))) {
         const char *n = e->d_name;
-        if (!strcmp(n, ".") || !strcmp(n, "..") || !strcmp(n, "fd") || !strcmp(n, "stdin") ||
-            !strcmp(n, "stdout") || !strcmp(n, "stderr")) continue;
-        snprintf(src, sizeof src, "/dev/%s", n);
-        snprintf(dst, sizeof dst, "%s/%s", dev, n);
+        if (!strcmp(n, ".") || !strcmp(n, "..")) continue;
+        if (skip_stdio && (!strcmp(n, "fd") || !strcmp(n, "stdin") || !strcmp(n, "stdout") || !strcmp(n, "stderr"))) continue;
+        snprintf(src, sizeof src, "%s/%s", from, n);
+        snprintf(dst, sizeof dst, "%s/%s", to, n);
         struct stat st;
         if (lstat(src, &st) != 0) continue;
         if (S_ISLNK(st.st_mode)) {
@@ -286,6 +310,12 @@ static void populate_dev(const char *dev) {
         }
     }
     closedir(d);
+}
+
+static void populate_dev(const char *dev) {
+    if (mount("tmpfs", dev, "tmpfs", MS_NOSUID, "mode=755") != 0) die("tmpfs on %s", dev);
+    mirror("/dev", dev, 1);
+    char dst[PATH_MAX];
     snprintf(dst, sizeof dst, "%s/fd", dev); (void) !symlink("/proc/self/fd", dst);
     snprintf(dst, sizeof dst, "%s/stdin", dev); (void) !symlink("/proc/self/fd/0", dst);
     snprintf(dst, sizeof dst, "%s/stdout", dev); (void) !symlink("/proc/self/fd/1", dst);
@@ -336,6 +366,18 @@ static int exit_code(int status) {
     return 1;
 }
 
+static int is_dev_null(int fd) {
+    struct stat st;
+    return fstat(fd, &st) == 0 && S_ISCHR(st.st_mode) && major(st.st_rdev) == 1 && minor(st.st_rdev) == 3;
+}
+
+/* The app sends the launcher's output to /dev/null; the guest's early errors would vanish there too. */
+static void capture_discarded_output(void) {
+    if (log_fd < 0) return;
+    if (is_dev_null(1)) dup2(log_fd, 1);
+    if (is_dev_null(2)) dup2(log_fd, 2);
+}
+
 /* PID 1 of the guest namespace: starts the command, reaps orphans, exits with the command. */
 static int guest_init(void) {
     prctl(PR_SET_PDEATHSIG, SIGKILL);
@@ -350,6 +392,7 @@ static int guest_init(void) {
         sigset_t none;
         sigemptyset(&none);
         sigprocmask(SIG_SETMASK, &none, NULL);
+        capture_discarded_output();
         execvp(guest_argv[0], guest_argv);
         die("exec %s", guest_argv[0]);
     }
