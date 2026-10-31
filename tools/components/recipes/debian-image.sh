@@ -2,8 +2,12 @@
 set -euo pipefail
 . tools/linuxfs/debian-image.env
 image=public.ecr.aws/docker/library/debian:bullseye
-if gh release download "$DEBIAN_IMAGE_TAG" -R "$GITHUB_REPOSITORY" -p "$DEBIAN_IMAGE_ASSET" -O /tmp/debian-image.tar.zst \
-   && { [ -z "$DEBIAN_IMAGE_SHA256" ] || echo "$DEBIAN_IMAGE_SHA256  /tmp/debian-image.tar.zst" | sha256sum -c -; }; then
+fetch_hosted() {
+  gh release download "$DEBIAN_IMAGE_TAG" -R "$1" -p "$DEBIAN_IMAGE_ASSET" -O /tmp/debian-image.tar.zst --clobber \
+    && { [ -z "$DEBIAN_IMAGE_SHA256" ] || echo "$DEBIAN_IMAGE_SHA256  /tmp/debian-image.tar.zst" | sha256sum -c -; }
+}
+# Forks carry no releases, so they fall back to the upstream copy before the registry.
+if fetch_hosted "$GITHUB_REPOSITORY" || fetch_hosted "${DEBIAN_IMAGE_REPO:-Droid-Deck/DroidDeck}"; then
   zstd -dc /tmp/debian-image.tar.zst | docker load
   rm -f /tmp/debian-image.tar.zst
 else
