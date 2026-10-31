@@ -1,0 +1,100 @@
+name: Turnip from Mesa main
+
+# Builds the Linux (glibc, KGSL) Turnip Vulkan driver straight from Mesa's development branch,
+# packaged the way DroidDeck imports Linux drivers: libvulkan_freedreno.so plus meta.json.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mesa_ref:
+        description: Mesa branch, tag or commit
+        default: main
+        required: true
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: turnip-mesa-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            build-essential ninja-build pkg-config python3-pip python3-mako python3-yaml python3-packaging \
+            flex bison glslang-tools libdrm-dev libelf-dev libexpat1-dev libzstd-dev zlib1g-dev \
+            libwayland-dev wayland-protocols libwayland-egl-backend-dev \
+            libx11-dev libxext-dev libxrandr-dev libx11-xcb-dev libxshmfence-dev libxxf86vm-dev \
+            libxcb1-dev libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-shm0-dev \
+            libxcb-sync-dev libxcb-xfixes0-dev libxcb-keysyms1-dev zip
+          pip3 install --break-system-packages --upgrade meson
+
+      - name: Fetch Mesa
+        env:
+          REF: ${{ github.event.inputs.mesa_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          git init -q mesa
+          git -C mesa remote add origin https://gitlab.freedesktop.org/mesa/mesa.git
+          git -C mesa fetch -q --depth 1 origin "$REF"
+          git -C mesa checkout -q FETCH_HEAD
+          echo "MESA_SHA=$(git -C mesa rev-parse --short=10 HEAD)" >> "$GITHUB_ENV"
+          echo "MESA_VERSION=$(cat mesa/VERSION)" >> "$GITHUB_ENV"
+          echo "MESA_DATE=$(git -C mesa log -1 --format=%cs)" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          meson setup mesa/build mesa \
+            --buildtype=release -Db_ndebug=true -Dstrip=true \
+            -Dplatforms=x11,wayland \
+            -Dvulkan-drivers=freedreno -Dfreedreno-kmds=kgsl \
+            -Dgallium-drivers= -Dopengl=false -Dgles1=disabled -Dgles2=disabled \
+            -Dglx=disabled -Degl=disabled -Dgbm=disabled -Dllvm=disabled \
+            -Dvalgrind=disabled -Dlibunwind=disabled -Dbuild-tests=false
+
+      - name: Build
+        run: ninja -C mesa/build src/freedreno/vulkan/libvulkan_freedreno.so
+
+      - name: Package for DroidDeck
+        run: |
+          set -euo pipefail
+          out=pkg
+          mkdir -p "$out"
+          cp mesa/build/src/freedreno/vulkan/libvulkan_freedreno.so "$out/"
+          glibc=$(ldd --version | head -1 | grep -oE '[0-9]+\.[0-9]+$')
+          name="Turnip Mesa $MESA_VERSION ($MESA_SHA)"
+          printf '{\n  "kind": "linux-vulkan-icd",\n  "name": "%s",\n  "driverVersion": "%s",\n  "minGlibc": "%s"\n}\n' \
+            "$name" "$MESA_VERSION-$MESA_SHA" "$glibc" > "$out/meta.json"
+          zip_name="Turnip-Mesa-main-$MESA_DATE-$MESA_SHA-Linux.zip"
+          (cd "$out" && zip -q -9 "../$zip_name" libvulkan_freedreno.so meta.json)
+          echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"
+          echo "GLIBC=$glibc" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: turnip-mesa-main
+          path: ${{ env.ZIP_NAME }}
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="turnip-mesa-$MESA_DATE-$MESA_SHA"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists"
+            exit 0
+          fi
+          gh release create "$tag" "$ZIP_NAME" -R "$GITHUB_REPOSITORY" --prerelease \
+            --title "Turnip Mesa main $MESA_DATE ($MESA_SHA)" \
+            --notes "Linux Turnip (KGSL) built from Mesa $MESA_VERSION, commit $MESA_SHA. Needs glibc $GLIBC or newer. Import the zip in DroidDeck's driver menu."
