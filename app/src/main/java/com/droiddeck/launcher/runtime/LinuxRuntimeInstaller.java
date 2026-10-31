@@ -663,6 +663,8 @@ public final class LinuxRuntimeInstaller {
             }
             Files.deleteIfExists(link.toPath());
             Files.createSymbolicLink(link.toPath(), shown.apply(intermediate));
+            ChrootMode.linksMayHaveChanged(tree);
+            ChrootMode.linksMayHaveChanged(linkTree);
             return true;
         } catch (IOException | RuntimeException e) {
             Log.w(TAG, "l2s link " + link + " -> " + target + ": " + e);

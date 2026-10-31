@@ -8,6 +8,14 @@ import java.io.File
 object ChrootMode {
     const val BINARY = "libddchroot.so"
 
+    /** ddchroot turns proot's link2symlink entries into hard links once, until something may add new ones. */
+    private const val LINKS_STAMP = ".ddchroot-links-done"
+
+    @JvmStatic
+    fun linksMayHaveChanged(root: File?) {
+        if (root != null) File(root, LINKS_STAMP).delete()
+    }
+
     fun binary(context: Context): File = File(context.applicationInfo.nativeLibraryDir, BINARY)
 
     /** Only once su has answered in this process, so building a command never waits on a root prompt. */

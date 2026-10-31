@@ -4,6 +4,7 @@
 // caller's uid and groups before the guest command starts.
 #define _GNU_SOURCE
 #include <dirent.h>
+#include <ftw.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
@@ -366,6 +367,44 @@ static int exit_code(int status) {
     return 1;
 }
 
+/* proot's link2symlink stores hard links as symlinks to hidden .l2s.* files. Without proot translating
+ * them, programs see the hidden name (uutils coreutils refuses to run that way), so with root they
+ * become real hard links again. The stamp is removed whenever proot or the installer may add more. */
+#define L2S_STAMP ".ddchroot-links-done"
+static int l2s_fixed, l2s_failed;
+
+static int l2s_visit(const char *path, const struct stat *st, int type, struct FTW *ftw) {
+    (void) st;
+    if (type != FTW_SL) return 0;
+    const char *name = path + ftw->base;
+    if (!strncmp(name, ".l2s.", 5)) return 0;
+    char target[PATH_MAX];
+    ssize_t n = readlink(path, target, sizeof target - 1);
+    if (n <= 0) return 0;
+    target[n] = 0;
+    if (!strstr(target, "/.l2s.") && strncmp(target, ".l2s.", 5)) return 0;
+    char final[PATH_MAX];
+    struct stat fst;
+    if (!realpath(path, final) || lstat(final, &fst) != 0 || !S_ISREG(fst.st_mode)) { l2s_failed++; return 0; }
+    const char *slash = strrchr(final, '/');
+    if (!slash || strncmp(slash + 1, ".l2s.", 5)) return 0;
+    char tmp[PATH_MAX];
+    snprintf(tmp, sizeof tmp, "%.*s.ddchroot-link-%d", (int) ftw->base, path, (int) getpid());
+    if (link(final, tmp) != 0 || rename(tmp, path) != 0) { unlink(tmp); l2s_failed++; return 0; }
+    l2s_fixed++;
+    return 0;
+}
+
+static void resolve_l2s(void) {
+    char stamp[PATH_MAX];
+    snprintf(stamp, sizeof stamp, "%s/" L2S_STAMP, opt_root);
+    if (access(stamp, F_OK) == 0) return;
+    nftw(opt_root, l2s_visit, 64, FTW_PHYS | FTW_MOUNT);
+    note("turned %d proot link2symlink entries into hard links (%d left)", l2s_fixed, l2s_failed);
+    int fd = open(stamp, O_CREAT | O_WRONLY | O_CLOEXEC, 0644);
+    if (fd >= 0) { (void) !fchown(fd, target_uid, target_gid); close(fd); }
+}
+
 static int is_dev_null(int fd) {
     struct stat st;
     return fstat(fd, &st) == 0 && S_ISCHR(st.st_mode) && major(st.st_rdev) == 1 && minor(st.st_rdev) == 3;
@@ -381,6 +420,7 @@ static void capture_discarded_output(void) {
 /* PID 1 of the guest namespace: starts the command, reaps orphans, exits with the command. */
 static int guest_init(void) {
     prctl(PR_SET_PDEATHSIG, SIGKILL);
+    resolve_l2s();
     setup_mounts();
     if (chdir(opt_root) != 0 || chroot(".") != 0) die("chroot %s", opt_root);
     drop_privileges();
