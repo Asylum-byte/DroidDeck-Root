@@ -44,6 +44,7 @@ object RootGameProfiles {
     }
 
     @Volatile private var watcher: Thread? = null
+    @Volatile private var gameFile: File? = null
 
     /** What the running session currently has applied; trials change it without saving a profile. */
     @Volatile var applied: Effective? = null
@@ -59,7 +60,7 @@ object RootGameProfiles {
     }
 
     fun runningScope(context: Context): String? =
-        runCatching { File(context.filesDir, ".wayland-rt/$GAME_FILE").readText().trim() }.getOrNull()
+        if (!SessionState.running) null else runCatching { File(context.filesDir, ".wayland-rt/$GAME_FILE").readText().trim() }.getOrNull()
             ?.takeIf { it.matches(Regex("[1-9][0-9]{0,9}")) }
 
     /** Follows the running game and switches the root settings to its profile, and back when it exits. */
@@ -69,6 +70,7 @@ object RootGameProfiles {
         val app = context.applicationContext
         val file = File(runtimeDir, GAME_FILE)
         file.delete()
+        gameFile = file
         applied = effective(app, null)
         watcher = Thread({
             var current: String? = null
@@ -90,6 +92,9 @@ object RootGameProfiles {
         watcher?.interrupt()
         watcher = null
         applied = null
+        // The guest's cleanup child dies with the session, so the marker is removed here too.
+        gameFile?.delete()
+        gameFile = null
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

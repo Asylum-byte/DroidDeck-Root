@@ -144,7 +144,7 @@ internal object AgentRoot {
 
     private fun status(context: Context): JSONObject {
         val g = RootPerfProfile.globalSettings(context)
-        val running = runCatching { File(context.filesDir, ".wayland-rt/droiddeck-game").readText().trim() }.getOrNull()
+        val running = RootGameProfiles.runningScope(context)
         return JSONObject()
             .put("global", JSONObject()
                 .put("profile", g.profile).put("fan", g.fan).put("gpuCapMhz", g.gpuCapMhz)
