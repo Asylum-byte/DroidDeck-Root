@@ -501,8 +501,12 @@ class SessionService : Service() {
             .onFailure { Log.w(TAG, "could not write the proot line to ${sessionLog.path}", it) }
 
         Log.i(TAG, GpuClockPin.start(this))
-        Thread({ Log.i(TAG, RootPerfProfile.start(this)) }, "root-perf-start").start()
-        Thread({ Log.i(TAG, RootGameBoost.start(this)) }, "root-boost-start").start()
+        val rootLine: (String) -> Unit = { line ->
+            Log.i(TAG, line)
+            runCatching { synchronized(sessionLog) { sessionLog.appendText("== $line\n") } }
+        }
+        Thread({ rootLine(RootPerfProfile.start(this)) }, "root-perf-start").start()
+        Thread({ rootLine(RootGameBoost.start(this)) }, "root-boost-start").start()
         Log.i(TAG, GameThreadHints.start(this))
 
         val size = SessionState.outputSize

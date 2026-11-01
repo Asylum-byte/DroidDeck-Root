@@ -930,6 +930,29 @@ class FrontEndActivity : ComponentActivity() {
         return started
     }
 
+    /** Ends the Linux session the normal way, then removes every task and process of this app. */
+    private fun quitApp() {
+        android.widget.Toast.makeText(this, R.string.setup_quit_progress, android.widget.Toast.LENGTH_SHORT).show()
+        val app = applicationContext
+        if (SessionState.running) SessionService.stop(this)
+        Thread({
+            val deadline = android.os.SystemClock.uptimeMillis() + QUIT_WAIT_MS
+            while (SessionState.running && android.os.SystemClock.uptimeMillis() < deadline) Thread.sleep(SESSION_SWITCH_POLL_MS)
+            runCatching { app.stopService(Intent(app, SessionService::class.java)) }
+            runOnUiThread {
+                val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+                runCatching { am.appTasks.forEach { it.finishAndRemoveTask() } }
+                finishAffinity()
+                val me = android.os.Process.myPid()
+                runCatching {
+                    am.runningAppProcesses?.filter { it.uid == android.os.Process.myUid() && it.pid != me }
+                        ?.forEach { android.os.Process.killProcess(it.pid) }
+                }
+                android.os.Process.killProcess(me)
+            }
+        }, "quit-app").start()
+    }
+
     private fun startAfterSession(next: Intent) {
         SessionService.stop(this)
         awaitSessionEnd(next, android.os.SystemClock.uptimeMillis() + SESSION_SWITCH_WAIT_MS)
@@ -1246,6 +1269,7 @@ class FrontEndActivity : ComponentActivity() {
                             SessionPrefs.setBackgroundAppLimit(this, limit); backgroundAppLimit = limit
                             if (limit == com.droiddeck.launcher.core.BackgroundAppLimit.OFF) com.droiddeck.launcher.core.BackgroundAppLimit.restoreAsync(this)
                         },
+                        onQuitApp = { quitApp() },
                         onShareLogs = {
                             SessionLogShare.prepare(this, { SessionLogShare.latest(this) }) { zip ->
                                 if (zip == null) android.widget.Toast.makeText(this, R.string.main_no_logs_yet, android.widget.Toast.LENGTH_LONG).show()
@@ -2792,6 +2816,7 @@ class FrontEndActivity : ComponentActivity() {
         private const val LINK_PANEL_MS = 1500L
         private const val SESSION_SWITCH_WAIT_MS = 30_000L
         private const val SESSION_SWITCH_POLL_MS = 250L
+        private const val QUIT_WAIT_MS = 10_000L
         private const val KEY_PENDING_SWITCH = "pending_switch"
         private const val KEY_COMPAT_LAUNCH = "compat_launch"
         private const val KEY_COMPAT_MENU_INSTALL = "compat_menu_install"
