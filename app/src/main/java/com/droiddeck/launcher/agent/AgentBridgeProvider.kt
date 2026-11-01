@@ -94,6 +94,7 @@ class AgentBridgeProvider : ContentProvider() {
         "prefs" -> prefs(context, request)
         "glasses" -> glasses(context, request)
         "access" -> JSONObject().put("ok", true).put("commands", AgentAccess.commandsAllowed(context))
+        "root" -> AgentRoot.handle(context, request)
             .put("debugBuild", BuildConfig.DEBUG).put("inbox", AgentEnv.inbox(context).absolutePath)
         else -> error("UNKNOWN_COMMAND", "Unknown agent command '$method'")
     }
