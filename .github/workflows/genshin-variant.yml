@@ -1,0 +1,83 @@
+name: Genshin variant
+
+# Repackages the Build APK result under Genshin Impact's package name, so vendor game profiles and
+# driver tweaks that key on that name apply. Signed with the project's public testkey, so every build
+# from this fork installs over the previous one.
+
+on:
+  workflow_run:
+    workflows: [Build APK]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Build APK run to repackage
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  TARGET: com.miHoYo.GenshinImpact
+
+jobs:
+  repackage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch the built apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.event.inputs.run_id || github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          if ! gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n droiddeck-apk -D in; then
+            echo "::notice::run $RUN has no droiddeck-apk (compilation failed); nothing to repackage"
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Rename and sign
+        if: env.SKIP != '1'
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)
+          apks=(in/*.apk)
+          [ ${#apks[@]} = 1 ] && [ -f "${apks[0]}" ] || { echo "::error::expected one apk"; exit 1; }
+          P=com.droiddeck.launcher
+          pkg=$TARGET
+          python3 tools/release/axml_rename.py "${apks[0]}" renamed.apk \
+            "$P=$pkg" "$P.androidx-startup=$pkg.androidx-startup" "$P.logs=$pkg.logs" \
+            "$P.pairingguide=$pkg.pairingguide" "$P.pin=$pkg.pin" \
+            "$P.documents=$pkg.documents" "$P.home=$pkg.home" "$P.agent=$pkg.agent" \
+            "$P.vr_recovery=$pkg.vr_recovery" "$P.dualscreen=$pkg.dualscreen" "$P.typing=$pkg.typing" \
+            "$P.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION=$pkg.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          got=$("$BUILD_TOOLS/aapt" dump badging renamed.apk | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
+          [ "$got" = "$pkg" ] || { echo "::error::apk says package '$got'"; exit 1; }
+          if "$BUILD_TOOLS/aapt" dump xmltree renamed.apk AndroidManifest.xml | grep -E 'android:(authorities|taskAffinity)' | grep -F "\"$P."; then
+            echo "::error::the manifest still names $P in an authority or task"; exit 1
+          fi
+          "$BUILD_TOOLS/zipalign" -p -f 4 renamed.apk aligned.apk
+          mkdir -p out
+          sha=$(echo "${{ github.event.workflow_run.head_sha || github.sha }}" | cut -c1-7)
+          out="out/DroidDeck-Root-$sha-genshin.apk"
+          TESTKEY_PASSWORD=android "$BUILD_TOOLS/apksigner" sign \
+            --ks keystore/testkey.p12 --ks-type PKCS12 --ks-pass env:TESTKEY_PASSWORD \
+            --ks-key-alias testkey --key-pass env:TESTKEY_PASSWORD \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false \
+            --out "$out" aligned.apk
+          rm -f "$out.idsig"
+          "$BUILD_TOOLS/apksigner" verify --min-sdk-version 26 "$out"
+          echo "- \`$(basename "$out")\` as \`$pkg\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: env.SKIP != '1'
+        with:
+          name: droiddeck-genshin
+          path: out/*.apk
+          if-no-files-found: error
