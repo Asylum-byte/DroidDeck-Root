@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 GAME_TU_DEBUG = "DROIDDECK_GAME_TU_DEBUG"
@@ -946,6 +947,49 @@ def start(launch, launch_env, digest, after=None):
     return os.execvpe(launch[0], launch, launch_env)
 
 
+def announce_game(app_id):
+    """Tells the Android side which game runs, for its per-game root profiles; gone once the game exits."""
+    run_dir = os.environ.get("XDG_RUNTIME_DIR", "")
+    if not run_dir or not os.path.isdir(run_dir):
+        return
+    path = os.path.join(run_dir, "droiddeck-game")
+    try:
+        staged = "%s.%d" % (path, os.getpid())
+        with open(staged, "w", encoding="ascii") as out:
+            out.write(app_id + "\n")
+        os.replace(staged, path)
+    except OSError:
+        return
+    launcher = os.getpid()
+    try:
+        if os.fork():
+            return
+    except OSError:
+        return
+    try:
+        os.setsid()
+        quiet = os.open(os.devnull, os.O_RDWR)
+        for fd in (0, 1, 2):
+            os.dup2(quiet, fd)
+        os.closerange(3, 65536)
+        while True:
+            try:
+                os.kill(launcher, 0)
+            except ProcessLookupError:
+                break
+            except OSError:
+                pass
+            time.sleep(1)
+        try:
+            with open(path, encoding="ascii") as current:
+                if current.read().strip() == app_id:
+                    os.unlink(path)
+        except OSError:
+            pass
+    finally:
+        os._exit(0)
+
+
 def main():
     command = sys.argv[1:]
     if not command:
@@ -968,6 +1012,7 @@ def main():
         waiting = len(command) > 1 and command[1] == "waitforexitandrun"
         if waiting:
             game_images(env)
+            announce_game(app_id)
         fixes = {}
         if waiting:
             command = skip_red_launcher(command)

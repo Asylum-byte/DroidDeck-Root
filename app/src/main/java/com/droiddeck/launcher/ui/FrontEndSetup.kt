@@ -718,6 +718,20 @@ internal fun GameSettingsMenus(host: MenuHost, game: com.droiddeck.launcher.fron
     val custom = stringResource(R.string.comp_game_fex_custom)
     val customSync = stringResource(R.string.game_sync_custom)
     val resetDone = stringResource(R.string.comp_game_reset_done, game.name)
+    var rootProfile by remember(scope) { mutableStateOf(com.droiddeck.launcher.session.RootGameProfiles.get(appContext, scope)) }
+    fun saveRoot(next: com.droiddeck.launcher.session.RootGameProfiles.Profile) {
+        rootProfile = next
+        com.droiddeck.launcher.session.RootGameProfiles.set(appContext, scope, next)
+    }
+    val capOff = stringResource(R.string.perf_root_cap_off)
+    val boostOff = stringResource(R.string.perf_root_boost_off)
+    val gpuText: (Int) -> String = { mhz -> if (mhz == 0) capOff else appContext.getString(R.string.perf_root_gpu_cap_mhz, mhz) }
+    val cpuText: (Int) -> String = { pct -> if (pct == 0) capOff else appContext.getString(R.string.perf_root_cpu_cap_percent, pct) }
+    val boostText: (Int) -> String = { pct -> if (pct == 0) boostOff else appContext.getString(R.string.perf_root_boost_level, pct) }
+    val inherit = com.droiddeck.launcher.session.RootGameProfiles.INHERIT
+    val rootGpuKey = "game-settings-root-gpu"
+    val rootCpuKey = "game-settings-root-cpu"
+    val rootBoostKey = "game-settings-root-boost"
     AnchoredMenu(host.open == key, onDismiss = { if (host.open == key) host.open = null }, title = stringResource(R.string.game_settings_menu_title, game.name)) { first ->
         MenuItem(stringResource(R.string.game_no_steam_title), checked = noSteam, enabled = ready,
             detail = stringResource(R.string.game_no_steam_detail), focusRequester = first) {
@@ -744,6 +758,21 @@ internal fun GameSettingsMenus(host: MenuHost, game: com.droiddeck.launcher.fron
                 },
                 trailing = { Text("›", fontSize = 16.sp, color = colors.onSurfaceVariant) },
             ) { host.open = syncKey }
+            MenuItem(
+                stringResource(R.string.perf_root_gpu_cap), checked = false,
+                detail = rootProfile.gpuCapMhz.takeIf { it != inherit }?.let(gpuText) ?: useDefault,
+                trailing = { Text("›", fontSize = 16.sp, color = colors.onSurfaceVariant) },
+            ) { host.open = rootGpuKey }
+            MenuItem(
+                stringResource(R.string.perf_root_cpu_cap), checked = false,
+                detail = rootProfile.cpuCapPercent.takeIf { it != inherit }?.let(cpuText) ?: useDefault,
+                trailing = { Text("›", fontSize = 16.sp, color = colors.onSurfaceVariant) },
+            ) { host.open = rootCpuKey }
+            MenuItem(
+                stringResource(R.string.perf_root_boost), checked = false,
+                detail = rootProfile.boost.takeIf { it != inherit }?.let(boostText) ?: useDefault,
+                trailing = { Text("›", fontSize = 16.sp, color = colors.onSurfaceVariant) },
+            ) { host.open = rootBoostKey }
         }
         MenuItem(stringResource(R.string.game_settings_default), checked = false, enabled = ready,
             detail = stringResource(R.string.game_settings_default_detail)) {
@@ -775,6 +804,21 @@ internal fun GameSettingsMenus(host: MenuHost, game: com.droiddeck.launcher.fron
             }
         }
     }
+    val rootChoices: @Composable (String, String, List<Int>, Int, (Int) -> String, (Int) -> Unit) -> Unit = { menuKey, title, options, chosen, text, pick ->
+        AnchoredMenu(host.open == menuKey, onDismiss = { if (host.open == menuKey) host.open = null }, title = title,
+            note = stringResource(R.string.game_root_note)) { first ->
+            MenuItem(useDefault, checked = chosen == inherit, focusRequester = first) { host.open = key; pick(inherit) }
+            options.forEach { option ->
+                MenuItem(text(option), checked = chosen == option) { host.open = key; pick(option) }
+            }
+        }
+    }
+    rootChoices(rootGpuKey, stringResource(R.string.perf_root_gpu_cap), com.droiddeck.launcher.session.RootPerfProfile.GPU_CAPS,
+        rootProfile.gpuCapMhz, gpuText) { saveRoot(rootProfile.copy(gpuCapMhz = it)) }
+    rootChoices(rootCpuKey, stringResource(R.string.perf_root_cpu_cap), com.droiddeck.launcher.session.RootPerfProfile.CPU_CAPS,
+        rootProfile.cpuCapPercent, cpuText) { saveRoot(rootProfile.copy(cpuCapPercent = it)) }
+    rootChoices(rootBoostKey, stringResource(R.string.perf_root_boost), com.droiddeck.launcher.session.RootGameBoost.LEVELS,
+        rootProfile.boost, boostText) { saveRoot(rootProfile.copy(boost = it)) }
     AnchoredMenu(host.open == syncKey, onDismiss = { if (host.open == syncKey) host.open = null }, title = stringResource(R.string.sync_backend_title)) { first ->
         MenuItem(useDefault, checked = sync == null, enabled = ready, detail = appSync, focusRequester = first) {
             host.open = key

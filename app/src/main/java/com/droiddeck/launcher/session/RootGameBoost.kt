@@ -2,7 +2,6 @@ package com.droiddeck.launcher.session
 
 import android.content.Context
 import android.os.Process
-import android.system.Os
 import android.util.Log
 import com.droiddeck.launcher.core.RootShell
 import java.io.File
@@ -24,9 +23,19 @@ object RootGameBoost {
     @Volatile private var sweeper: Thread? = null
     private val moved = HashSet<Int>()
 
+    /** Changes the floor of a running session; 0 removes the boost group. */
     @Synchronized
-    fun start(context: Context): String {
-        val level = SessionPrefs.rootGameBoost(context)
+    fun setLevel(context: Context, level: Int) {
+        if (level <= 0) { stop(context); return }
+        if (sweeper != null && File(context.filesDir, MARKER).exists()) {
+            RootShell.run(listOf("echo $level > $GROUP/cpu.uclamp.min"))
+            File(context.filesDir, MARKER).writeText(level.toString())
+            Log.i(TAG, "boost now $level")
+        } else Log.i(TAG, start(context, level))
+    }
+
+    @Synchronized
+    fun start(context: Context, level: Int = SessionPrefs.rootGameBoost(context)): String {
         if (level <= 0) return "game boost: off"
         if (!RootShell.available()) return "game boost: no root, left alone"
         cleanup(context)
@@ -74,21 +83,23 @@ object RootGameBoost {
         val uid = Process.myUid()
         val pkg = context.packageName
         while (!Thread.currentThread().isInterrupted) {
-            val fresh = File("/proc").list().orEmpty().mapNotNull { it.toIntOrNull() }.filter { pid ->
-                pid != me && synchronized(moved) { pid !in moved } && ownedBy(pid, uid) && !isAppProcess(pid, pkg)
-            }
+            // Under chroot the guest runs in su's SELinux domain, so only root can see its /proc entries.
+            val listing = RootShell.run(listOf("ps -A -o PID,UID,NAME"))
+            val fresh = listing.output.lines().mapNotNull { line ->
+                val cols = line.trim().split(Regex("\\s+"))
+                val pid = cols.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+                val owner = cols.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+                val name = cols.getOrNull(2).orEmpty()
+                pid.takeIf { owner == uid && it != me && name != pkg && !name.startsWith("$pkg:") }
+            }.filter { pid -> synchronized(moved) { pid !in moved } }
             if (fresh.isNotEmpty()) {
                 RootShell.run(listOf("for p in ${fresh.joinToString(" ")}; do echo \$p > $GROUP/cgroup.procs; done 2>/dev/null; true"))
-                synchronized(moved) { moved.addAll(fresh) }
+                synchronized(moved) {
+                    moved.addAll(fresh)
+                    if (moved.size > 4096) moved.clear()
+                }
             }
             try { Thread.sleep(SWEEP_MS) } catch (_: InterruptedException) { return }
         }
     }
-
-    private fun ownedBy(pid: Int, uid: Int): Boolean = try { Os.stat("/proc/$pid").st_uid == uid } catch (_: Exception) { false }
-
-    /** Android's own processes for this package are placed by ActivityManager and stay where it puts them. */
-    private fun isAppProcess(pid: Int, pkg: String): Boolean = try {
-        File("/proc/$pid/cmdline").readText().substringBefore('\u0000').let { it == pkg || it.startsWith("$pkg:") }
-    } catch (_: Exception) { true }
 }

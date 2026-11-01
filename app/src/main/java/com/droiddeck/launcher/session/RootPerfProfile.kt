@@ -25,13 +25,28 @@ object RootPerfProfile {
 
     private val NODE = Regex("^/sys/[A-Za-z0-9_./-]+$")
 
+    data class Settings(val profile: String, val fan: Boolean, val gpuCapMhz: Int, val cpuCapPercent: Int) {
+        val off: Boolean get() = profile == OFF && !fan && gpuCapMhz <= 0 && cpuCapPercent <= 0
+    }
+
+    fun globalSettings(context: Context) = Settings(
+        SessionPrefs.rootPerfProfile(context), SessionPrefs.rootFanMax(context),
+        SessionPrefs.rootGpuCapMhz(context), SessionPrefs.rootCpuCapPercent(context),
+    )
+
+    /** Swaps the running session over to other settings, undoing the previous ones first. */
     @Synchronized
-    fun start(context: Context): String {
-        val profile = SessionPrefs.rootPerfProfile(context)
-        val fan = SessionPrefs.rootFanMax(context)
-        val gpuCap = SessionPrefs.rootGpuCapMhz(context)
-        val cpuCap = SessionPrefs.rootCpuCapPercent(context)
-        if (profile == OFF && !fan && gpuCap <= 0 && cpuCap <= 0) return "root perf: off"
+    fun switchTo(context: Context, settings: Settings): String = start(context, settings)
+
+    @Synchronized
+    fun start(context: Context, settings: Settings = globalSettings(context)): String {
+        val profile = settings.profile
+        val fan = settings.fan
+        val gpuCap = settings.gpuCapMhz
+        val cpuCap = settings.cpuCapPercent
+        stopGuard()
+        if (File(context.filesDir, SNAPSHOT).exists() && RootShell.known()) restore(context)
+        if (settings.off) return "root perf: off"
         if (!RootShell.available()) return "root perf: no root, left alone"
         restore(context)
         val probe = listOf("$KGSL/min_pwrlevel", "$KGSL/max_pwrlevel", "$KGSL/num_pwrlevels", "$KGSL/max_clock_mhz", FAN_ENABLE, FAN_LEVEL)
