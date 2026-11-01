@@ -637,6 +637,18 @@ object SessionPrefs {
         prefs(context).edit().putString("rootPerfProfile", profile).apply()
     }
 
+    fun rootGpuCapMhz(context: Context): Int = prefs(context).getInt("rootGpuCapMhz", 0)
+
+    fun setRootGpuCapMhz(context: Context, mhz: Int) {
+        prefs(context).edit().putInt("rootGpuCapMhz", mhz).apply()
+    }
+
+    fun rootCpuCapPercent(context: Context): Int = prefs(context).getInt("rootCpuCapPercent", 0)
+
+    fun setRootCpuCapPercent(context: Context, percent: Int) {
+        prefs(context).edit().putInt("rootCpuCapPercent", percent).apply()
+    }
+
     fun rootGameBoost(context: Context): Int = prefs(context).getInt("rootGameBoost", 0)
 
     fun setRootGameBoost(context: Context, percent: Int) {

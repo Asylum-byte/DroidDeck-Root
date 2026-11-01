@@ -51,6 +51,8 @@ fun PerformancePage(
     rootAutoPhantom: Boolean,
     rootChroot: Boolean,
     rootGameBoost: Int,
+    rootGpuCapMhz: Int,
+    rootCpuCapPercent: Int,
     ramCapMb: Int,
     zramClient: Boolean,
     vramCapMb: Int,
@@ -77,6 +79,8 @@ fun PerformancePage(
     onRootAutoPhantom: (Boolean) -> Unit,
     onRootChroot: (Boolean) -> Unit,
     onRootGameBoost: (Int) -> Unit,
+    onRootGpuCapMhz: (Int) -> Unit,
+    onRootCpuCapPercent: (Int) -> Unit,
     onRamCapMb: (Int) -> Unit,
     onZramClient: (Boolean) -> Unit,
     onVramCapMb: (Int) -> Unit,
@@ -153,6 +157,22 @@ fun PerformancePage(
                     com.droiddeck.launcher.session.RootPerfProfile.PERFORMANCE to stringResource(R.string.perf_root_profile_performance),
                 ),
                 rootPerfProfile, onPick = onRootPerfProfile,
+            )
+            ChoiceRow(
+                host, "rootgpucap", stringResource(R.string.perf_root_gpu_cap),
+                stringResource(R.string.perf_root_gpu_cap_hint),
+                com.droiddeck.launcher.session.RootPerfProfile.GPU_CAPS.map { mhz ->
+                    mhz to if (mhz == 0) stringResource(R.string.perf_root_cap_off) else stringResource(R.string.perf_root_gpu_cap_mhz, mhz)
+                },
+                rootGpuCapMhz, onPick = onRootGpuCapMhz,
+            )
+            ChoiceRow(
+                host, "rootcpucap", stringResource(R.string.perf_root_cpu_cap),
+                stringResource(R.string.perf_root_cpu_cap_hint),
+                com.droiddeck.launcher.session.RootPerfProfile.CPU_CAPS.map { pct ->
+                    pct to if (pct == 0) stringResource(R.string.perf_root_cap_off) else stringResource(R.string.perf_root_cpu_cap_percent, pct)
+                },
+                rootCpuCapPercent, onPick = onRootCpuCapPercent,
             )
             ChoiceRow(
                 host, "rootboost", stringResource(R.string.perf_root_boost),

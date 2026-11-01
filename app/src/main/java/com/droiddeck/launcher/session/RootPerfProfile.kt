@@ -15,6 +15,8 @@ object RootPerfProfile {
     private const val CPUFREQ = "/sys/devices/system/cpu/cpufreq"
     private const val KGSL = "/sys/class/kgsl/kgsl-3d0"
     private const val EFFICIENT_SHARE = 0.75
+    val GPU_CAPS = listOf(0, 1000, 900, 800, 700)
+    val CPU_CAPS = listOf(0, 90, 80, 70)
 
     // Nubia/RedMagic kernels expose the built-in fan here; other devices simply lack the nodes.
     private const val FAN_ENABLE = "/sys/kernel/fan/fan_enable"
@@ -27,14 +29,20 @@ object RootPerfProfile {
     fun start(context: Context): String {
         val profile = SessionPrefs.rootPerfProfile(context)
         val fan = SessionPrefs.rootFanMax(context)
-        if (profile == OFF && !fan) return "root perf: off"
+        val gpuCap = SessionPrefs.rootGpuCapMhz(context)
+        val cpuCap = SessionPrefs.rootCpuCapPercent(context)
+        if (profile == OFF && !fan && gpuCap <= 0 && cpuCap <= 0) return "root perf: off"
         if (!RootShell.available()) return "root perf: no root, left alone"
         restore(context)
         val probe = listOf("$KGSL/min_pwrlevel", "$KGSL/max_pwrlevel", "$KGSL/num_pwrlevels", FAN_ENABLE, FAN_LEVEL)
         val present = RootShell.run(listOf("for p in ${probe.joinToString(" ")}; do [ -e \$p ] && echo \$p; done"))
             .output.lines().map { it.trim() }.toSet()
         val gpuLevels = RootShell.run(listOf("cat $KGSL/num_pwrlevels 2>/dev/null")).lastLine.toLongOrNull()
-        val writes = plan(profile, fan, present, gpuLevels)
+        val gpuFreqs = RootShell.run(listOf("cat $KGSL/gpu_available_frequencies 2>/dev/null")).lastLine
+            .split(Regex("\\s+")).mapNotNull { it.toLongOrNull() }
+        val capLevel = if (gpuCap > 0) gpuCapLevel(gpuFreqs, gpuCap) else null
+        if (gpuCap > 0 && capLevel == null) Log.w(TAG, "gpu cap $gpuCap MHz: no frequency table (${gpuFreqs.size} entries)")
+        val writes = plan(profile, fan, present, gpuLevels, capLevel, cpuCap)
         if (writes.isEmpty()) return "root perf: nothing to change on this device"
         val snapshot = RootShell.run(writes.map { (path, _) -> "echo \"$path=$(cat $path 2>/dev/null)\"" })
         val saved = snapshot.output.lines().filter { line ->
@@ -43,7 +51,11 @@ object RootPerfProfile {
         }
         File(context.filesDir, SNAPSHOT).writeText(saved.joinToString("\n"))
         val applied = RootShell.run(writes.map { (path, value) -> "echo $value > $path" })
-        val summary = "root perf: $profile${if (fan) " + fan" else ""}, ${writes.size} nodes"
+        val caps = listOfNotNull(
+            capLevel?.let { "gpu <= ${gpuFreqs[it] / 1_000_000} MHz" },
+            cpuCap.takeIf { it > 0 }?.let { "cpu <= $it %" },
+        ).joinToString(", ")
+        val summary = "root perf: $profile${if (fan) " + fan" else ""}${if (caps.isNotEmpty()) ", $caps" else ""}, ${writes.size} nodes"
         return if (applied.ok) summary else "$summary (some writes refused: ${applied.output.trim().take(200)})"
     }
 
@@ -74,26 +86,40 @@ object RootPerfProfile {
         file.delete()
     }
 
-    private fun plan(profile: String, fan: Boolean, present: Set<String>, gpuLevels: Long?): List<Pair<String, String>> {
+    /** kgsl lists frequencies from the fastest down; the list index is the power level. */
+    internal fun gpuCapLevel(freqsHz: List<Long>, capMhz: Int): Int? {
+        if (freqsHz.size < 2) return null
+        val limit = capMhz * 1_000_000L
+        val level = freqsHz.indexOfFirst { it <= limit }
+        return when {
+            level < 0 -> freqsHz.lastIndex
+            level == 0 -> null
+            else -> level
+        }
+    }
+
+    private fun plan(profile: String, fan: Boolean, present: Set<String>, gpuLevels: Long?,
+                     gpuCapLevel: Int?, cpuCapPercent: Int): List<Pair<String, String>> {
         val writes = ArrayList<Pair<String, String>>()
         val policies = File(CPUFREQ).listFiles { f -> f.name.startsWith("policy") }?.sortedBy { it.name }.orEmpty()
-        when (profile) {
-            PERFORMANCE -> {
-                policies.forEach { p ->
-                    val top = readLong(File(p, "cpuinfo_max_freq")) ?: return@forEach
-                    writes += "${p.path}/scaling_min_freq" to top.toString()
-                }
-                if ("$KGSL/min_pwrlevel" in present) writes += "$KGSL/min_pwrlevel" to "0"
-            }
-            EFFICIENT -> {
-                policies.forEach { p ->
-                    val top = readLong(File(p, "cpuinfo_max_freq")) ?: return@forEach
-                    val cap = nearestBelow(p, (top * EFFICIENT_SHARE).toLong()) ?: return@forEach
-                    writes += "${p.path}/scaling_max_freq" to cap.toString()
-                }
-                if (gpuLevels != null && gpuLevels > 2 && "$KGSL/max_pwrlevel" in present) writes += "$KGSL/max_pwrlevel" to "1"
-            }
+        val cpuShare = when {
+            cpuCapPercent > 0 -> cpuCapPercent / 100.0
+            profile == EFFICIENT -> EFFICIENT_SHARE
+            else -> null
         }
+        val cpuCaps = policies.associateWith { p ->
+            val top = readLong(File(p, "cpuinfo_max_freq"))
+            if (top == null || cpuShare == null) null else nearestBelow(p, (top * cpuShare).toLong())
+        }
+        policies.forEach { p ->
+            val top = readLong(File(p, "cpuinfo_max_freq")) ?: return@forEach
+            val cap = cpuCaps[p]
+            if (cap != null) writes += "${p.path}/scaling_max_freq" to cap.toString()
+            if (profile == PERFORMANCE) writes += "${p.path}/scaling_min_freq" to (cap ?: top).toString()
+        }
+        val gpuMax = gpuCapLevel ?: if (profile == EFFICIENT && gpuLevels != null && gpuLevels > 2) 1 else null
+        if (gpuMax != null && "$KGSL/max_pwrlevel" in present) writes += "$KGSL/max_pwrlevel" to gpuMax.toString()
+        if (profile == PERFORMANCE && "$KGSL/min_pwrlevel" in present) writes += "$KGSL/min_pwrlevel" to (gpuMax ?: 0).toString()
         if (fan && FAN_ENABLE in present) {
             writes += FAN_ENABLE to "1"
             if (FAN_LEVEL in present) writes += FAN_LEVEL to FAN_TOP_LEVEL

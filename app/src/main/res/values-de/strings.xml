@@ -594,6 +594,13 @@
     <string name="perf_root_profile_performance">Leistung (Takt dauerhaft am Maximum)</string>
     <string name="perf_root_chroot">Linux-Runtime per chroot starten (experimentell)</string>
     <string name="perf_root_chroot_hint">Braucht Root (KernelSU oder APatch). Startet Steam und Spiele ohne proot, mit weniger Overhead. Paket-Installationen laufen weiter über proot. Abschalten, falls eine Sitzung nicht startet.</string>
+    <string name="perf_root_gpu_cap">GPU-Taktgrenze</string>
+    <string name="perf_root_gpu_cap_hint">Braucht Root. Begrenzt die GPU während einer Sitzung. Die letzten paar hundert MHz kosten viel mehr Strom, als sie FPS bringen, und eine kühlere GPU drosselt später.</string>
+    <string name="perf_root_gpu_cap_mhz">bis %1$d MHz</string>
+    <string name="perf_root_cpu_cap">CPU-Taktgrenze</string>
+    <string name="perf_root_cpu_cap_hint">Braucht Root. Begrenzt alle CPU-Cluster während einer Sitzung auf einen Anteil ihres Höchsttakts.</string>
+    <string name="perf_root_cpu_cap_percent">bis %1$d %%</string>
+    <string name="perf_root_cap_off">Keine Grenze</string>
     <string name="perf_root_boost">CPU-Boost für Spiele</string>
     <string name="perf_root_boost_hint">Braucht Root. Gibt den Linux-Prozessen der Sitzung eine Mindestleistung, damit sie auf schnellen Kernen landen und der Takt früher steigt. Schont den Akku mehr als ein dauerhaft maximaler Takt.</string>
     <string name="perf_root_boost_off">Aus</string>

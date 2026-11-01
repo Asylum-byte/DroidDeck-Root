@@ -618,6 +618,13 @@
     <string name="perf_root_profile_performance">Performance (clocks held at the top)</string>
     <string name="perf_root_chroot">Run the Linux runtime with chroot (experimental)</string>
     <string name="perf_root_chroot_hint">Needs root (KernelSU or APatch). Starts Steam and games without proot for less overhead. Package installs stay on proot. Turn off if a session does not start.</string>
+    <string name="perf_root_gpu_cap">GPU clock limit</string>
+    <string name="perf_root_gpu_cap_hint">Needs root. Caps the GPU while a session runs. The last few hundred MHz cost far more power than they add frames, and a cooler GPU throttles later.</string>
+    <string name="perf_root_gpu_cap_mhz">up to %1$d MHz</string>
+    <string name="perf_root_cpu_cap">CPU clock limit</string>
+    <string name="perf_root_cpu_cap_hint">Needs root. Caps every CPU cluster at a share of its top clock while a session runs.</string>
+    <string name="perf_root_cpu_cap_percent">up to %1$d %%</string>
+    <string name="perf_root_cap_off">No limit</string>
     <string name="perf_root_boost">CPU boost for games</string>
     <string name="perf_root_boost_hint">Needs root. Gives the session\'s Linux processes a minimum performance level, so they land on fast cores and clocks rise early. Lighter on the battery than holding clocks at the top.</string>
     <string name="perf_root_boost_off">Off</string>
