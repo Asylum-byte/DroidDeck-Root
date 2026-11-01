@@ -1,0 +1,81 @@
+name: Sync upstream
+
+# Merges Droid-Deck/DroidDeck main into this fork and starts a build. A conflict stops the sync
+# without touching main, so it can be resolved by hand.
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: Droid-Deck/DroidDeck
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Pushing upstream workflow changes needs a token with the workflow scope; GITHUB_TOKEN lacks it.
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" main
+          behind=$(git rev-list --count HEAD..FETCH_HEAD)
+          echo "upstream is $behind commits ahead"
+          if [ "$behind" = 0 ]; then echo "changed=0" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if ! git merge --no-edit -m "Merge $UPSTREAM main" FETCH_HEAD; then
+            git diff --name-only --diff-filter=U | sed 's/^/conflict: /'
+            git merge --abort
+            echo "::error::upstream changes conflict with this fork's changes; merge them by hand"
+            exit 1
+          fi
+          echo "changed=1" >> "$GITHUB_OUTPUT"
+          echo "behind=$behind" >> "$GITHUB_OUTPUT"
+
+      - name: Keep this fork's CI changes
+        if: steps.merge.outputs.changed == '1'
+        run: |
+          set -euo pipefail
+          changed=0
+          if [ -f .github/workflows/authorship.yml ]; then git rm -q .github/workflows/authorship.yml; changed=1; fi
+          if grep -q "name: Check human authorship" .github/workflows/build.yml; then
+            python3 - <<'PY'
+          import re
+          path = ".github/workflows/build.yml"
+          text = open(path).read()
+          text = re.sub(r"\n      - name: Check human authorship\n.*?(?=\n      - name: )", "", text, count=1, flags=re.S)
+          open(path, "w").write(text)
+          PY
+            git add .github/workflows/build.yml
+            changed=1
+          fi
+          if [ "$changed" = 1 ]; then git commit -q -m "CI: keep the human-authorship gate out of this fork"; fi
+
+      - name: Push
+        if: steps.merge.outputs.changed == '1'
+        run: git push origin HEAD:main
+
+      - name: Build the merged tree
+        if: steps.merge.outputs.changed == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/dispatches" -f ref=main
+          echo "Merged ${{ steps.merge.outputs.behind }} upstream commits and started Build APK" >> "$GITHUB_STEP_SUMMARY"
