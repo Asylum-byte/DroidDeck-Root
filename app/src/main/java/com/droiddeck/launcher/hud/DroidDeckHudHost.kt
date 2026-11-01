@@ -70,6 +70,9 @@ class DroidDeckHudHost(context: Context) {
         override fun doFrame(frameTimeNanos: Long) {
             if (!running || !polling) return
             if (feed.poll(System.nanoTime())) view?.onFrames()
+            LiveFrames.stats = feed.stats
+            LiveFrames.engine = feed.engine
+            LiveFrames.updatedNs = System.nanoTime()
             Choreographer.getInstance().postFrameCallback(this)
         }
     }

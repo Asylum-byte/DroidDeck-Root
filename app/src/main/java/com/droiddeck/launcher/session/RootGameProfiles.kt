@@ -45,6 +45,23 @@ object RootGameProfiles {
 
     @Volatile private var watcher: Thread? = null
 
+    /** What the running session currently has applied; trials change it without saving a profile. */
+    @Volatile var applied: Effective? = null
+        private set
+
+    @Synchronized
+    fun applyNow(context: Context, next: Effective): String {
+        val before = applied ?: effective(context, null)
+        val perf = if (next.perf != before.perf) RootPerfProfile.switchTo(context, next.perf) else "clocks unchanged"
+        if (next.boost != before.boost) RootGameBoost.setLevel(context, next.boost)
+        applied = next
+        return "$perf, boost ${next.boost}"
+    }
+
+    fun runningScope(context: Context): String? =
+        runCatching { File(context.filesDir, ".wayland-rt/$GAME_FILE").readText().trim() }.getOrNull()
+            ?.takeIf { it.matches(Regex("[1-9][0-9]{0,9}")) }
+
     /** Follows the running game and switches the root settings to its profile, and back when it exits. */
     @Synchronized
     fun watch(context: Context, runtimeDir: File, report: (String) -> Unit) {
@@ -52,20 +69,16 @@ object RootGameProfiles {
         val app = context.applicationContext
         val file = File(runtimeDir, GAME_FILE)
         file.delete()
+        applied = effective(app, null)
         watcher = Thread({
             var current: String? = null
-            var applied = effective(app, null)
             while (!Thread.currentThread().isInterrupted) {
                 val scope = runCatching { file.readText().trim() }.getOrNull()?.takeIf { it.matches(Regex("[1-9][0-9]{0,9}")) }
                 if (scope != current) {
                     current = scope
                     val next = effective(app, scope)
-                    if (next != applied) {
-                        val perf = if (next.perf != applied.perf) RootPerfProfile.switchTo(app, next.perf) else null
-                        if (next.boost != applied.boost) RootGameBoost.setLevel(app, next.boost)
-                        applied = next
-                        report("game profile ${scope ?: "none (global)"}: ${perf ?: "clocks unchanged"}, boost ${next.boost}")
-                    } else Log.i(TAG, "game ${scope ?: "-"} uses the global root settings")
+                    if (next != applied) report("game profile ${scope ?: "none (global)"}: ${applyNow(app, next)}")
+                    else Log.i(TAG, "game ${scope ?: "-"} uses the global root settings")
                 }
                 try { Thread.sleep(POLL_MS) } catch (_: InterruptedException) { break }
             }
@@ -76,6 +89,7 @@ object RootGameProfiles {
     fun unwatch() {
         watcher?.interrupt()
         watcher = null
+        applied = null
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
