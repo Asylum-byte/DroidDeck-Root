@@ -681,6 +681,12 @@ object SessionPrefs {
         prefs(context).edit().putInt("rootCpuCapPercent", percent).apply()
     }
 
+    fun rootSoftThrottle(context: Context): Boolean = prefs(context).getBoolean("rootSoftThrottle", false)
+
+    fun setRootSoftThrottle(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("rootSoftThrottle", on).apply()
+    }
+
     fun rootGameBoost(context: Context): Int = prefs(context).getInt("rootGameBoost", 0)
 
     fun setRootGameBoost(context: Context, percent: Int) {

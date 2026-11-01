@@ -607,6 +607,8 @@
     <string name="perf_root_cpu_cap_percent">bis %1$d %%</string>
     <string name="perf_root_cap_off">Keine Grenze</string>
     <string name="game_root_note">Braucht Root. Gilt immer, wenn dieses Spiel läuft, auch wenn du es in Steam startest, und wird nach dem Beenden zurückgesetzt.</string>
+    <string name="perf_root_soft">Sanfte Drosselung</string>
+    <string name="perf_root_soft_hint">Braucht Root. Senkt die GPU-Grenze schrittweise, wenn es warm wird (GPU 70 °C, Akku 39 °C), damit die FPS sanft sinken statt dass Android den Takt schlagartig kappt. Gibt nach dem Abkühlen wieder frei.</string>
     <string name="perf_root_boost">CPU-Boost für Spiele</string>
     <string name="perf_root_boost_hint">Braucht Root. Gibt den Linux-Prozessen der Sitzung eine Mindestleistung, damit sie auf schnellen Kernen landen und der Takt früher steigt. Schont den Akku mehr als ein dauerhaft maximaler Takt.</string>
     <string name="perf_root_boost_off">Aus</string>

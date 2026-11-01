@@ -631,6 +631,8 @@
     <string name="perf_root_cpu_cap_percent">up to %1$d %%</string>
     <string name="perf_root_cap_off">No limit</string>
     <string name="game_root_note">Needs root. Applies whenever this game runs, also when started from inside Steam, and switches back when it exits.</string>
+    <string name="perf_root_soft">Soft throttle</string>
+    <string name="perf_root_soft_hint">Needs root. Lowers the GPU limit step by step as it warms (GPU 70 °C, battery 39 °C) so frame rates sink gently instead of Android cutting the clock at once. Gives it back once cooled.</string>
     <string name="perf_root_boost">CPU boost for games</string>
     <string name="perf_root_boost_hint">Needs root. Gives the session\'s Linux processes a minimum performance level, so they land on fast cores and clocks rise early. Lighter on the battery than holding clocks at the top.</string>
     <string name="perf_root_boost_off">Off</string>

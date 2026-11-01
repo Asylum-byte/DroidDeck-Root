@@ -176,6 +176,7 @@ class FrontEndActivity : ComponentActivity() {
     private var rootAutoPhantom by mutableStateOf(true)
     private var rootChroot by mutableStateOf(false)
     private var rootGameBoost by mutableStateOf(0)
+    private var rootSoftThrottle by mutableStateOf(false)
     private var rootGpuCapMhz by mutableStateOf(0)
     private var rootCpuCapPercent by mutableStateOf(0)
     private var prootNoSeccomp by mutableStateOf(false)
@@ -2278,7 +2279,7 @@ class FrontEndActivity : ComponentActivity() {
             fsyncFirst = fsyncFirst,
             gamescopeRealtime = gamescopeRealtime,
             gpuClockPin = gpuClockPin,
-            rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom, rootChroot = rootChroot, rootGameBoost = rootGameBoost,
+            rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom, rootChroot = rootChroot, rootGameBoost = rootGameBoost, rootSoftThrottle = rootSoftThrottle,
             rootGpuCapMhz = rootGpuCapMhz, rootCpuCapPercent = rootCpuCapPercent,
             ramCapMb = ramCapMb, vramCapMb = vramCapMb, zramClient = zramClient,
             deviceRamMb = (android.app.ActivityManager.MemoryInfo()
@@ -2306,6 +2307,7 @@ class FrontEndActivity : ComponentActivity() {
                 }, "root-phantom").start()
             },
             onRootGameBoost = { level -> SessionPrefs.setRootGameBoost(this, level); rootGameBoost = level },
+            onRootSoftThrottle = { on -> SessionPrefs.setRootSoftThrottle(this, on); rootSoftThrottle = on },
             onRootGpuCapMhz = { mhz -> SessionPrefs.setRootGpuCapMhz(this, mhz); rootGpuCapMhz = mhz },
             onRootCpuCapPercent = { pct -> SessionPrefs.setRootCpuCapPercent(this, pct); rootCpuCapPercent = pct },
             onRootChroot = { on ->
@@ -2533,6 +2535,7 @@ class FrontEndActivity : ComponentActivity() {
         rootAutoPhantom = SessionPrefs.rootAutoPhantom(this)
         rootChroot = SessionPrefs.rootChroot(this)
         rootGameBoost = SessionPrefs.rootGameBoost(this)
+        rootSoftThrottle = SessionPrefs.rootSoftThrottle(this)
         rootGpuCapMhz = SessionPrefs.rootGpuCapMhz(this)
         rootCpuCapPercent = SessionPrefs.rootCpuCapPercent(this)
         prootNoSeccomp = SessionPrefs.prootNoSeccomp(this)

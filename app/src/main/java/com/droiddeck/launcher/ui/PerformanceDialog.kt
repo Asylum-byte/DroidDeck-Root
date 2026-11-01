@@ -51,6 +51,7 @@ fun PerformancePage(
     rootAutoPhantom: Boolean,
     rootChroot: Boolean,
     rootGameBoost: Int,
+    rootSoftThrottle: Boolean,
     rootGpuCapMhz: Int,
     rootCpuCapPercent: Int,
     ramCapMb: Int,
@@ -79,6 +80,7 @@ fun PerformancePage(
     onRootAutoPhantom: (Boolean) -> Unit,
     onRootChroot: (Boolean) -> Unit,
     onRootGameBoost: (Int) -> Unit,
+    onRootSoftThrottle: (Boolean) -> Unit,
     onRootGpuCapMhz: (Int) -> Unit,
     onRootCpuCapPercent: (Int) -> Unit,
     onRamCapMb: (Int) -> Unit,
@@ -181,6 +183,11 @@ fun PerformancePage(
                     level to if (level == 0) stringResource(R.string.perf_root_boost_off) else stringResource(R.string.perf_root_boost_level, level)
                 },
                 rootGameBoost, onPick = onRootGameBoost,
+            )
+            ToggleRow(
+                host, "rootsoft", stringResource(R.string.perf_root_soft),
+                stringResource(R.string.perf_root_soft_hint),
+                rootSoftThrottle, onChange = onRootSoftThrottle,
             )
             ToggleRow(
                 host, "rootfan", stringResource(R.string.perf_root_fan),

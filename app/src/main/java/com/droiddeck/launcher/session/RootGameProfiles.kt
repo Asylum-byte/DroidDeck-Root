@@ -50,13 +50,34 @@ object RootGameProfiles {
     @Volatile var applied: Effective? = null
         private set
 
+    /** Extra GPU limit from the soft throttle (0 = none), applied on top of whatever the profile sets. */
+    @Volatile var thermalCapMhz: Int = 0
+        private set
+    @Volatile private var onDevice: RootPerfProfile.Settings? = null
+
+    private fun withThermal(perf: RootPerfProfile.Settings): RootPerfProfile.Settings {
+        val cap = thermalCapMhz
+        if (cap <= 0 || (perf.gpuCapMhz in 1..cap)) return perf
+        return perf.copy(gpuCapMhz = cap)
+    }
+
     @Synchronized
     fun applyNow(context: Context, next: Effective): String {
         val before = applied ?: effective(context, null)
-        val perf = if (next.perf != before.perf) RootPerfProfile.switchTo(context, next.perf) else "clocks unchanged"
+        val wanted = withThermal(next.perf)
+        val perf = if (wanted != onDevice) RootPerfProfile.switchTo(context, wanted).also { onDevice = wanted } else "clocks unchanged"
         if (next.boost != before.boost) RootGameBoost.setLevel(context, next.boost)
         applied = next
         return "$perf, boost ${next.boost}"
+    }
+
+    /** The soft throttle moved its limit; re-applies the current profile with it. */
+    @Synchronized
+    fun setThermalCap(context: Context, mhz: Int): String? {
+        if (mhz == thermalCapMhz) return null
+        thermalCapMhz = mhz
+        val base = applied ?: return null
+        return applyNow(context, base)
     }
 
     fun runningScope(context: Context): String? =
@@ -72,6 +93,8 @@ object RootGameProfiles {
         file.delete()
         gameFile = file
         applied = effective(app, null)
+        onDevice = applied?.perf
+        thermalCapMhz = 0
         watcher = Thread({
             var current: String? = null
             while (!Thread.currentThread().isInterrupted) {
@@ -92,6 +115,8 @@ object RootGameProfiles {
         watcher?.interrupt()
         watcher = null
         applied = null
+        onDevice = null
+        thermalCapMhz = 0
         // The guest's cleanup child dies with the session, so the marker is removed here too.
         gameFile?.delete()
         gameFile = null

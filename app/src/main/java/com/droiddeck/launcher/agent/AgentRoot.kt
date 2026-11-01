@@ -41,6 +41,13 @@ internal object AgentRoot {
                     v.getString("profile").takeIf { it in setOf(RootPerfProfile.OFF, RootPerfProfile.EFFICIENT, RootPerfProfile.PERFORMANCE) }
                         ?: throw AgentException("INVALID_REQUEST", "profile must be off, efficient or performance"))
                 if (v.has("chroot")) SessionPrefs.setRootChroot(context, v.getBoolean("chroot"))
+                if (v.has("softThrottle")) {
+                    SessionPrefs.setRootSoftThrottle(context, v.getBoolean("softThrottle"))
+                    if (com.droiddeck.launcher.session.SessionState.running) {
+                        if (v.getBoolean("softThrottle")) com.droiddeck.launcher.session.RootSoftThrottle.start(context) {}
+                        else { com.droiddeck.launcher.session.RootSoftThrottle.stop(); RootGameProfiles.setThermalCap(context, 0) }
+                    }
+                }
             }
             status(context)
         }
@@ -149,7 +156,9 @@ internal object AgentRoot {
             .put("global", JSONObject()
                 .put("profile", g.profile).put("fan", g.fan).put("gpuCapMhz", g.gpuCapMhz)
                 .put("cpuCapPercent", g.cpuCapPercent).put("boost", SessionPrefs.rootGameBoost(context))
-                .put("chroot", SessionPrefs.rootChroot(context)))
+                .put("chroot", SessionPrefs.rootChroot(context))
+                .put("softThrottle", SessionPrefs.rootSoftThrottle(context)))
+            .put("thermalCapMhz", RootGameProfiles.thermalCapMhz)
             .put("runningGame", running ?: JSONObject.NULL)
             .put("options", JSONObject()
                 .put("gpuCapMhz", JSONArray(RootPerfProfile.GPU_CAPS))
