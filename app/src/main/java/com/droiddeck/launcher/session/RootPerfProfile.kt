@@ -42,7 +42,7 @@ object RootPerfProfile {
             .split(Regex("\\s+")).mapNotNull { it.toLongOrNull() }
         val capLevel = if (gpuCap > 0) gpuCapLevel(gpuFreqs, gpuCap) else null
         if (gpuCap > 0 && capLevel == null) Log.w(TAG, "gpu cap $gpuCap MHz: no frequency table (${gpuFreqs.size} entries)")
-        val writes = plan(profile, fan, present, gpuLevels, capLevel, cpuCap)
+        val writes = plan(profile, fan, present, gpuLevels, capLevel, cpuCap).toMutableList()
         val capMhz = capLevel?.let { (gpuFreqs[it] / 1_000_000).toInt() } ?: gpuCap.takeIf { it > 0 }
         if (capMhz != null && "$KGSL/max_clock_mhz" in present) writes += "$KGSL/max_clock_mhz" to capMhz.toString()
         if (writes.isEmpty()) return "root perf: nothing to change on this device"
