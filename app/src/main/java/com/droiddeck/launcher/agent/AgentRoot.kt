@@ -120,7 +120,14 @@ internal object AgentRoot {
         val presetKeys = com.droiddeck.launcher.core.FexPreset.environmentKeys
         val vars = JSONObject()
         config.games[scope].orEmpty().filterKeys { it !in presetKeys }.forEach { (k, v) -> vars.put(k, v ?: JSONObject.NULL) }
+        val shared = JSONObject()
+        (ge.defaults(com.droiddeck.launcher.session.SessionPrefs.fexPreset(context),
+            com.droiddeck.launcher.session.SessionPrefs.forceSsbs(context)) + config.shared)
+            .forEach { (k, v) -> shared.put(k, v ?: JSONObject.NULL) }
         return JSONObject().put("scope", scope)
+            .put("shared", shared)
+            .put("globalFexPreset", com.droiddeck.launcher.session.SessionPrefs.fexPreset(context))
+            .put("globalSync", com.droiddeck.launcher.session.SessionPrefs.syncBackend(context))
             .put("fexPreset", runCatching { ge.gameFexPreset(config, scope) }.getOrNull() ?: JSONObject.NULL)
             .put("sync", runCatching { ge.gameSync(config, scope) }.getOrNull() ?: JSONObject.NULL)
             .put("vars", vars)
