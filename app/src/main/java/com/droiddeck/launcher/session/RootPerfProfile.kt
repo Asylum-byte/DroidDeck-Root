@@ -34,7 +34,7 @@ object RootPerfProfile {
         if (profile == OFF && !fan && gpuCap <= 0 && cpuCap <= 0) return "root perf: off"
         if (!RootShell.available()) return "root perf: no root, left alone"
         restore(context)
-        val probe = listOf("$KGSL/min_pwrlevel", "$KGSL/max_pwrlevel", "$KGSL/num_pwrlevels", FAN_ENABLE, FAN_LEVEL)
+        val probe = listOf("$KGSL/min_pwrlevel", "$KGSL/max_pwrlevel", "$KGSL/num_pwrlevels", "$KGSL/max_clock_mhz", FAN_ENABLE, FAN_LEVEL)
         val present = RootShell.run(listOf("for p in ${probe.joinToString(" ")}; do [ -e \$p ] && echo \$p; done"))
             .output.lines().map { it.trim() }.toSet()
         val gpuLevels = RootShell.run(listOf("cat $KGSL/num_pwrlevels 2>/dev/null")).lastLine.toLongOrNull()
@@ -43,6 +43,8 @@ object RootPerfProfile {
         val capLevel = if (gpuCap > 0) gpuCapLevel(gpuFreqs, gpuCap) else null
         if (gpuCap > 0 && capLevel == null) Log.w(TAG, "gpu cap $gpuCap MHz: no frequency table (${gpuFreqs.size} entries)")
         val writes = plan(profile, fan, present, gpuLevels, capLevel, cpuCap)
+        val capMhz = capLevel?.let { (gpuFreqs[it] / 1_000_000).toInt() } ?: gpuCap.takeIf { it > 0 }
+        if (capMhz != null && "$KGSL/max_clock_mhz" in present) writes += "$KGSL/max_clock_mhz" to capMhz.toString()
         if (writes.isEmpty()) return "root perf: nothing to change on this device"
         val snapshot = RootShell.run(writes.map { (path, _) -> "echo \"$path=$(cat $path 2>/dev/null)\"" })
         val saved = snapshot.output.lines().filter { line ->
@@ -51,8 +53,10 @@ object RootPerfProfile {
         }
         File(context.filesDir, SNAPSHOT).writeText(saved.joinToString("\n"))
         val applied = RootShell.run(writes.map { (path, value) -> "echo $value > $path" })
+        if (capMhz != null) guard(context, capLevel?.takeIf { "$KGSL/max_pwrlevel" in present },
+            capMhz.takeIf { "$KGSL/max_clock_mhz" in present })
         val caps = listOfNotNull(
-            capLevel?.let { "gpu <= ${gpuFreqs[it] / 1_000_000} MHz" },
+            capMhz?.let { "gpu <= $it MHz" + if (capLevel == null) " (no level table, clock node only)" else "" },
             cpuCap.takeIf { it > 0 }?.let { "cpu <= $it %" },
         ).joinToString(", ")
         val summary = "root perf: $profile${if (fan) " + fan" else ""}${if (caps.isNotEmpty()) ", $caps" else ""}, ${writes.size} nodes"
@@ -61,7 +65,45 @@ object RootPerfProfile {
 
     @Synchronized
     fun stop(context: Context) {
+        stopGuard()
         restore(context)
+    }
+
+    @Volatile private var guardProcess: Process? = null
+
+    /**
+     * Vendor game modes rewrite the GPU limits while a game runs, so a root shell re-applies the cap
+     * every couple of seconds. It only ever lowers the limit: a stricter thermal limit is left alone.
+     */
+    private fun guard(context: Context, level: Int?, mhz: Int?) {
+        stopGuard()
+        if (level == null && mhz == null) return
+        val app = android.os.Process.myPid()
+        val checks = buildList {
+            if (level != null) add("v=$(cat $KGSL/max_pwrlevel); [ \"\$v\" -lt $level ] && echo $level > $KGSL/max_pwrlevel && echo \"guard: max_pwrlevel \$v -> $level\"")
+            if (mhz != null) add("v=$(cat $KGSL/max_clock_mhz); [ \"\$v\" -gt $mhz ] && echo $mhz > $KGSL/max_clock_mhz && echo \"guard: max_clock_mhz \$v -> $mhz\"")
+        }
+        val script = "while [ -d /proc/$app ]; do ${checks.joinToString("; ")}; sleep 2; done\n"
+        val process = try { ProcessBuilder("su").redirectErrorStream(true).start() } catch (e: Exception) {
+            Log.w(TAG, "guard: no su", e); return
+        }
+        guardProcess = process
+        runCatching { process.outputStream.write(script.toByteArray()); process.outputStream.flush() }
+        Thread({
+            var fixes = 0
+            runCatching {
+                process.inputStream.bufferedReader().forEachLine { line ->
+                    fixes++
+                    if (fixes <= 5 || fixes % 50 == 0) Log.i(TAG, "$line (#$fixes)")
+                }
+            }
+        }, "root-gpu-guard").apply { isDaemon = true; start() }
+        Log.i(TAG, "guard: holding gpu at level ${level ?: "-"} / ${mhz ?: "-"} MHz")
+    }
+
+    private fun stopGuard() {
+        guardProcess?.let { p -> runCatching { p.outputStream.close() }; p.destroy() }
+        guardProcess = null
     }
 
     @Synchronized
