@@ -940,6 +940,10 @@ class FrontEndActivity : ComponentActivity() {
             val deadline = android.os.SystemClock.uptimeMillis() + QUIT_WAIT_MS
             while (SessionState.running && android.os.SystemClock.uptimeMillis() < deadline) Thread.sleep(SESSION_SWITCH_POLL_MS)
             runCatching { app.stopService(Intent(app, SessionService::class.java)) }
+            // The session restores these on a background thread; finish it before the process is killed.
+            runCatching { com.droiddeck.launcher.session.RootSoftThrottle.stop() }
+            runCatching { com.droiddeck.launcher.session.RootPerfProfile.stop(app) }
+            runCatching { com.droiddeck.launcher.session.RootGameBoost.stop(app) }
             runOnUiThread {
                 val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
                 runCatching { am.appTasks.forEach { it.finishAndRemoveTask() } }

@@ -67,6 +67,7 @@ object RootPerfProfile {
             NODE.matches(path) && line.substringAfter('=').isNotBlank()
         }
         File(context.filesDir, SNAPSHOT).writeText(saved.joinToString("\n"))
+        ensureWatchdog(context)
         val applied = RootShell.run(writes.map { (path, value) -> "echo $value > $path" })
         if (capMhz != null) guard(context, capLevel?.takeIf { "$KGSL/max_pwrlevel" in present },
             capMhz.takeIf { "$KGSL/max_clock_mhz" in present })
@@ -85,6 +86,24 @@ object RootPerfProfile {
     }
 
     @Volatile private var guardProcess: Process? = null
+    @Volatile private var watchdogPid: Int = 0
+
+    /**
+     * Swiping the app away or killing it skips the normal restore, which left the fan at full speed and the
+     * clock limits in place. A root shell outside the app's cgroup (so Android's kill doesn't take it along)
+     * waits for the app process to die and then writes the snapshot back, just like stop() would.
+     */
+    private fun ensureWatchdog(context: Context) {
+        val app = android.os.Process.myPid()
+        if (watchdogPid == app) return
+        val snap = File(context.filesDir, SNAPSHOT).absolutePath
+        val inner = "echo \$\$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null; " +
+            "while [ -d /proc/$app ]; do sleep 3; done; " +
+            "[ -f $snap ] && { tac $snap | while IFS== read -r p v; do case \"\$p\" in /sys/*) echo \"\$v\" > \"\$p\";; esac; done; rm -f $snap; }"
+        val result = RootShell.run(listOf("setsid sh -c '$inner' </dev/null >/dev/null 2>&1 &"))
+        if (result.ok) watchdogPid = app
+        Log.i(TAG, "watchdog: restore on app exit ${if (result.ok) "armed" else "failed (${result.output.trim().take(120)})"}")
+    }
 
     /**
      * Vendor game modes rewrite the GPU limits while a game runs, so a root shell re-applies the cap
