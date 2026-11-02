@@ -169,9 +169,13 @@ internal object AgentRoot {
     private fun games(context: Context): JSONObject {
         val cached = com.droiddeck.launcher.frontend.LibraryCache.snapshot(context).first
         val list = JSONArray()
+        val env = runCatching { com.droiddeck.launcher.session.GameEnvironmentStore.read(context) }.getOrNull()
         cached.distinctBy { it.profileKey }.forEach { game ->
             val p = RootGameProfiles.get(context, game.profileKey)
+            // gameId is what the frontend launches (64-bit for shortcuts); noSteam games run without the Steam client.
             list.put(JSONObject().put("scope", game.profileKey).put("appId", game.appId).put("name", game.name)
+                .put("gameId", game.gameIdString)
+                .put("noSteam", env != null && com.droiddeck.launcher.session.NoSteamLaunch.enabled(env, game))
                 .put("profile", encode(p)))
         }
         return JSONObject().put("games", list)
