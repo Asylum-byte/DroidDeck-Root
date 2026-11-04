@@ -246,7 +246,6 @@ class DirtTelemetryFixTest(unittest.TestCase):
 
 
 class EgoCorePlanTest(unittest.TestCase):
-    """DiRT 3's restrictions as shipped: plans for 2, 3, 4, 6 and 8+ cores, one core for anything else."""
 
     @staticmethod
     def rule(op, value, worker_map):
@@ -460,7 +459,6 @@ class GameDebugLoggingTest(unittest.TestCase):
                 result = launch([str(probe), verb], {**env, "STEAM_COMPAT_DATA_PATH": str(home / "compatdata" / prefix)})
                 self.assertEqual(result["env"]["PROTON_LOG"], "0")
                 self.assertEqual(result["env"]["WINEDEBUG"], "-all")
-            # Non-Steam shortcuts use the same normalized unsigned compatdata identity.
             result = launch(command, {**env, "STEAM_COMPAT_DATA_PATH": str(home / "compatdata/-1")})
             self.assertEqual(result["env"]["PROTON_LOG"], "1")
             self.assertFalse((home / "never-created").exists())
@@ -650,6 +648,15 @@ class GameEnvironmentTest(unittest.TestCase):
             self.assertEqual(evaluate(), (0, 2))
             self.assertEqual(evaluate(), (0, 2))
             self.assertEqual(evaluate("changed"), (0, 3))
+
+    def test_the_mali_bridge_caps_the_vkd3d_feature_level(self):
+        bridge = {"BL_VKBRIDGE": "1", "VKD3D_FEATURE_LEVEL": "12_2"}
+        self.assertIn("capped", MODULE["bridge_feature_level"](bridge))
+        self.assertEqual(bridge["VKD3D_FEATURE_LEVEL"], "12_0")
+        for env in ({"BL_VKBRIDGE": "1", "VKD3D_FEATURE_LEVEL": "11_1"}, {"VKD3D_FEATURE_LEVEL": "12_2"}, {"BL_VKBRIDGE": "1"}):
+            before = dict(env)
+            self.assertIsNone(MODULE["bridge_feature_level"](env))
+            self.assertEqual(env, before)
 
     def test_profile_precedence_and_unset(self):
         env = {"KEEP": "inherited", "REMOVE": "inherited", "CUSTOM": "launch option"}
@@ -874,6 +881,38 @@ class GameEnvironmentTest(unittest.TestCase):
             self.assertEqual(MODULE["engine_fixes"](str(game / "TheCrew2.exe"), [])[0], {"WINEDLLOVERRIDES": "d3dgear64=d"})
             (game / "D3DGear64.DLL").unlink()
             self.assertEqual(MODULE["engine_fixes"](str(game / "TheCrew2.exe"), []), ({}, [], []))
+
+    def test_doom_2016_keeps_the_swapchain_image_count_it_asks_for(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game = Path(tmp) / "DOOM (2016)"
+            game.mkdir()
+            for name in ("DOOMx64.exe", "DOOMx64vk.exe", "Galaxy64.dll"):
+                (game / name).touch()
+            images = {
+                "GAMESCOPE_WSI_MIN_IMAGE_COUNT": None,
+                "GAMESCOPE_WSI_ENSURE_MIN_IMAGE_COUNT": None,
+                "vk_x11_strict_image_count": "true",
+            }
+            for exe in ("DOOMx64.exe", "DOOMx64vk.exe"):
+                env, extra, notes = MODULE["engine_fixes"](str(game / exe), [])
+                self.assertEqual((env, extra), (images, []))
+                self.assertTrue(notes)
+            launched = {"GAMESCOPE_WSI_MIN_IMAGE_COUNT": "8", "GAMESCOPE_WSI_ENSURE_MIN_IMAGE_COUNT": "1"}
+            result = MODULE["apply_config"](launched, {"version": 1}, "3566086475", env)
+            self.assertNotIn("GAMESCOPE_WSI_MIN_IMAGE_COUNT", result)
+            self.assertNotIn("GAMESCOPE_WSI_ENSURE_MIN_IMAGE_COUNT", result)
+            self.assertEqual(result["vk_x11_strict_image_count"], "true")
+            config = {"version": 1, "games": {"3566086475": {"GAMESCOPE_WSI_MIN_IMAGE_COUNT": "3"}}}
+            self.assertEqual(MODULE["apply_config"](launched, config, "3566086475", env)["GAMESCOPE_WSI_MIN_IMAGE_COUNT"], "3")
+            eternal = Path(tmp) / "DOOMEternal"
+            eternal.mkdir()
+            (eternal / "DOOMEternalx64vk.exe").touch()
+            self.assertEqual(MODULE["engine_fixes"](str(eternal / "DOOMEternalx64vk.exe"), []), ({}, [], []))
+            other = Path(tmp) / "Other"
+            other.mkdir()
+            for name in ("Other.exe", "DOOMx64vk.exe"):
+                (other / name).touch()
+            self.assertEqual(MODULE["engine_fixes"](str(other / "Other.exe"), []), ({}, [], []))
 
     def test_dll_overrides_from_several_fixes_are_all_kept(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1994,6 +2033,51 @@ class DirectAudioPrefixTest(unittest.TestCase):
         self.assertIn("WINEDLLPATH=\n", result.stdout)
         self.assertEqual(self.audio_values(), [])
         self.assertIsNone(self.link("system32"))
+
+
+class ProjectZomboidJvmTest(unittest.TestCase):
+    ARGS = ["-Djava.awt.headless=true", "-Xmx3072m", "-XX:+UseZGC", "-XX:-CreateCoredumpOnCrash"]
+
+    def launch(self, tmp, args=None, stem="ProjectZomboid64"):
+        settings = Path(tmp) / (stem + ".json")
+        settings.write_text(json.dumps({"mainClass": "zombie/gameStates/MainScreenState", "vmArgs": args or self.ARGS}))
+        command = ["proton", "waitforexitandrun", str(Path(tmp) / (stem + ".exe"))]
+        return settings, command
+
+    def test_zgc_becomes_g1_and_the_c1_jit_flag_is_added_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings, command = self.launch(tmp)
+            MODULE["project_zomboid_jvm"](command)
+            data = json.loads(settings.read_text())
+            self.assertEqual(data["vmArgs"], ["-Djava.awt.headless=true", "-Xmx3072m", "-XX:-CreateCoredumpOnCrash",
+                                              "-XX:+UseG1GC", "-XX:TieredStopAtLevel=1"])
+            self.assertEqual(data["mainClass"], "zombie/gameStates/MainScreenState")
+            before = settings.read_text()
+            MODULE["project_zomboid_jvm"](command)
+            self.assertEqual(settings.read_text(), before)
+
+    def test_other_collectors_and_windows_specific_lists_are_rewritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings, command = self.launch(tmp)
+            settings.write_text(json.dumps({"vmArgs": ["-XX:+UseParallelGC", "-Xmx1g"],
+                                            "windows": {"10.0.17134": {"vmArgs": ["-XX:+UseZGC", "-XX:+UseG1GC"]}}}))
+            MODULE["project_zomboid_jvm"](command)
+            data = json.loads(settings.read_text())
+            flags = ["-XX:+UseG1GC", "-XX:TieredStopAtLevel=1"]
+            self.assertEqual(data["vmArgs"], ["-Xmx1g"] + flags)
+            self.assertEqual(data["windows"]["10.0.17134"]["vmArgs"], flags)
+
+    def test_other_games_and_unreadable_files_are_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings, command = self.launch(tmp, stem="Other")
+            before = settings.read_text()
+            MODULE["project_zomboid_jvm"](command)
+            self.assertEqual(settings.read_text(), before)
+            settings.write_text("{")
+            MODULE["project_zomboid_jvm"](command[:2] + [str(Path(tmp) / "Other.exe")])
+            (Path(tmp) / "ProjectZomboid64.json").write_text("{")
+            MODULE["project_zomboid_jvm"](command[:2] + [str(Path(tmp) / "ProjectZomboid64.exe")])
+            self.assertEqual((Path(tmp) / "ProjectZomboid64.json").read_text(), "{")
 
 
 class UbisoftOverlayTest(unittest.TestCase):

@@ -34,6 +34,7 @@ import com.droiddeck.launcher.input.PointerGestures
 import com.droiddeck.launcher.input.SecondScreenMode
 import com.droiddeck.launcher.input.TouchpadGestures
 import com.droiddeck.launcher.SessionActivity
+import com.droiddeck.launcher.session.BottomDesktop
 import com.droiddeck.launcher.session.SessionService
 import com.droiddeck.launcher.session.SessionState
 import com.droiddeck.launcher.session.SessionTerminal
@@ -57,6 +58,7 @@ class SecondScreenPresentation(
     private val onMenu: (() -> Unit)? = null,
     private val menu: (@androidx.compose.runtime.Composable () -> Unit)? = null,
     private val dashboard: (@androidx.compose.runtime.Composable () -> Unit)? = null,
+    private val onSwap: (() -> Unit)? = null,
 ) : Presentation(sessionActivity, display) {
     private val frame = FrameLayout(context)
     private var menuView: androidx.compose.ui.platform.ComposeView? = null
@@ -199,7 +201,8 @@ class SecondScreenPresentation(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val ownKeys = currentMode == SecondScreenMode.TERMINAL || currentMode == SecondScreenMode.DASHBOARD
+        val ownKeys = currentMode == SecondScreenMode.TERMINAL || currentMode == SecondScreenMode.DASHBOARD ||
+            currentMode == SecondScreenMode.DESKTOP
         val forward = menuShown || !ownKeys || PadBridge.isControllerKeyEvent(event)
         if (forward && sessionActivity.dispatchKeyEvent(event)) return true
         return super.dispatchKeyEvent(event)
@@ -231,6 +234,7 @@ class SecondScreenPresentation(
         val mode = when {
             currentMode == SecondScreenMode.DECK_CONTROLS && !SessionState.deckPad -> SecondScreenMode.NONE
             currentMode == SecondScreenMode.DASHBOARD && dashboard == null -> SecondScreenMode.NONE
+            currentMode == SecondScreenMode.DESKTOP && !BottomDesktop.available() -> SecondScreenMode.NONE
             else -> currentMode
         }
         if (mode == SecondScreenMode.NONE) return
@@ -240,6 +244,11 @@ class SecondScreenPresentation(
             SecondScreenMode.TERMINAL -> renderTerminal()
             SecondScreenMode.DECK_CONTROLS -> root.addView(DeckControlsPanel(context, onClose, onSteamMenu, onQam, pad, onMenu = onMenu), weightParams())
             SecondScreenMode.DASHBOARD -> renderDashboard()
+            SecondScreenMode.DESKTOP -> {
+                ownComposeViews()
+                root.addView(BottomDesktopPanel(context, onClose, onMenu,
+                    (onSteamMenu to onQam).takeIf { SessionState.mode == SessionService.MODE_STEAM }, onSwap), weightParams())
+            }
             SecondScreenMode.NONE -> Unit
         }
     }

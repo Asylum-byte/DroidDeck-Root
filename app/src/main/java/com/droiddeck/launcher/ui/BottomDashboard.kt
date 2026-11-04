@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.droiddeck.launcher.R
 
-/** A page the bottom screen can show while the game runs on the main screen. */
 class BottomPage(
     val id: String,
     @StringRes val label: Int,
@@ -56,10 +56,6 @@ class BottomPage(
 internal fun pickBottomPage(remembered: String?, ids: List<String>): String? =
     ids.firstOrNull { it == remembered } ?: ids.firstOrNull { it == DEFAULT_PAGE } ?: ids.firstOrNull()
 
-/**
- * The tab picked during one session. Each Steam session starts with no pick, so the dashboard opens on Chat; reopened
- * later in the same session it shows the tab picked last.
- */
 internal object SessionBottomTab {
     private var session: String? = null
     private var tab: String? = null
@@ -74,13 +70,11 @@ internal object SessionBottomTab {
     }
 }
 
-/** The page a game start switches to; not remembered as the user's pick. */
 internal fun pageForGameStart(ids: List<String>): String? = GAME_PAGE.takeIf { it in ids }
 
 private const val DEFAULT_PAGE = "chat"
 private const val GAME_PAGE = "telemetry"
 
-/** Tabs show their names while every tab still fits at [TAB_WIDTH]; otherwise only the open tab keeps its name. */
 internal fun bottomTabsWithLabels(widthDp: Float, tabs: Int): Boolean = tabs * TAB_WIDTH + 2 * BAR_BUTTON <= widthDp
 
 private const val TAB_WIDTH = 132f
@@ -91,9 +85,11 @@ fun BottomDashboard(
     pages: List<BottomPage>,
     remembered: String?,
     onPage: (String) -> Unit,
-    onClose: () -> Unit,
+    onClose: (() -> Unit)?,
     onMenu: (() -> Unit)?,
     gameStarts: Int = 0,
+    strip: (@Composable (String?) -> Unit)? = null,
+    onSwap: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     var current by remember { mutableStateOf(pickBottomPage(remembered, pages.map { it.id })) }
@@ -106,7 +102,7 @@ fun BottomDashboard(
         val labels = bottomTabsWithLabels(maxWidth.value, pages.size)
         Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BarButton(Icons.Outlined.Close, stringResource(R.string.deck_close), "bottom-close", onClose)
+                if (onClose != null) BarButton(Icons.Outlined.Close, stringResource(R.string.deck_close), "bottom-close", onClose)
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     pages.forEach { p ->
                         PageTab(p, p.id == page?.id, labels) {
@@ -115,8 +111,10 @@ fun BottomDashboard(
                         }
                     }
                 }
+                if (onSwap != null) BarButton(Icons.Outlined.SwapVert, stringResource(R.string.swap_screens), "bottom-swap", onSwap)
                 if (onMenu != null) BarButton(Icons.Outlined.Menu, stringResource(R.string.touch_droiddeck_menu), "bottom-menu", onMenu)
             }
+            strip?.invoke(page?.id)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (page != null) page.content()
                 else Text(stringResource(R.string.bottom_dashboard_empty), fontSize = 15.sp, color = colors.onSurfaceVariant,
