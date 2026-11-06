@@ -180,6 +180,7 @@
     <string name="app_fex_x86">%1$s FEXin kautta</string>
     <string name="app_fex_not_ready">Tämä ohjelma on tehty %1$s-tietokoneille ja käynnistyy FEXin kautta, jota ei ole vielä määritetty. Avaa Steam kerran kirjautuneena: DroidDeck lataa sen myötä FEXin ja tarvittavan Steam Linux Runtimen, jonka jälkeen tämä avautuu.</string>
     <string name="session_proot_missing">DroidDeckin proota ei voitu ladata. Tarkista yhteys ja yritä uudelleen. Istuntoa ei käynnistetty, koska varaproot on liian hidas pelaamiseen.</string>
+    <string name="session_powervr_missing">PowerVR-grafiikkaympäristöä ei voitu ladata. Tarkista yhteys ja yritä uudelleen.</string>
     <string name="session_directaudio_missing">DirectAudiota ei voitu ladata, joten pelin ääni käyttää tässä istunnossa hitaampaa reittiä.</string>
     <string name="session_end_program">Tämä ohjelma</string>
     <string name="session_end_steam_download">Steam-asiakasohjelmaa ei voitu ladata. Verkkosi tai VPN saattaa estää Steamin palvelimet; tarkista yhteys ja yritä uudelleen.</string>
@@ -585,7 +586,7 @@
     <string name="perf_ram_cap_hint">Koskee aikaa, jolloin Steam-asiakasohjelma on käynnissä, Steam-tilassa tai työpöydältä. Kun istunto käyttää tätä enemmän, Steam ja sen jälkeen istunnon muut tuetut prosessit pakataan zRAMiin. Pehmeä raja: mitään ei suljeta, mutta pelit voivat nykiä, kun sivuja luetaan takaisin.</string>
     <string name="perf_ram_cap_unavailable">Vaatii zRAM-swapin, jota tässä laitteessa ei ole.</string>
     <string name="perf_vram_cap">VRAM-raja</string>
-    <string name="perf_vram_cap_hint">Videomuisti, jonka DXVK ilmoittaa Direct3D-peleille, jotta ne mitoittavat tekstuurit pienemmälle. Pelin omat DXVK-asetukset menevät edelle. Tulee voimaan seuraavassa istunnossa.</string>
+    <string name="perf_vram_cap_hint">Ilmoittaa tämän videomuistibudjetin Direct3D 9–12 -peleille muistin käytön vähentämiseksi. Pelit voivat ylittää sen; tämä ei lisää GPU-sivutusta eikä takaa suojaa muistin loppumisesta johtuvilta kaatumisilta. Tulee voimaan seuraavassa istunnossa.</string>
     <string name="perf_gpuclock">Pidä GPU huippukellotaajuudessaan</string>
     <string name="perf_gpuclock_hint">Vain Adreno. Vähemmän nykäyksiä, enemmän akun kulutusta ja lämpöä.</string>
     <string name="perf_fixes">Istunnon korjaukset</string>
@@ -670,6 +671,8 @@
     <string name="hud_group_metrics">Lukemat</string>
     <string name="hud_metric_graph">Kuva-aikakäyrä</string>
     <string name="hud_metric_decimal">Kuvataajuus desimaalilla</string>
+    <string name="hud_metric_low1">1% alin</string>
+    <string name="hud_metric_low01">0.1% alin</string>
     <string name="hud_metric_low001">0.01% alin</string>
     <string name="hud_metric_engine">Grafiikkamoottori</string>
     <string name="hud_metric_gpu_model">GPU:n nimi</string>
@@ -811,7 +814,7 @@
     <string name="setup_gpu_unsupported">GPU ei ole tuettu</string>
     <string name="setup_gpu_detail">%1$s · %2$s</string>
     <string name="setup_gpu_untested_detail">%1$s: %2$s</string>
-    <string name="setup_gpu_unsupported_detail">Steam tarvitsee Adreno-ajurin; %1$s saattaa näyttää mustan ruudun</string>
+    <string name="setup_gpu_unsupported_detail">GPU:lle %1$s ei ole saatavilla yhteensopivaa grafiikkataustajärjestelmää. Steam saattaa näyttää mustan ruudun.</string>
     <string name="setup_runtime">Linux-ajoympäristö</string>
     <string name="setup_runtime_progress">%1$s · %2$d%%</string>
     <string name="setup_runtime_missing">Ei asennettu · noin 3 GB, asennetaan ensimmäisellä Pelaa-painalluksella</string>
@@ -1106,6 +1109,7 @@
     <string name="ctrl_stick_click_hint">Kaksoisnapauta ja pidä sauvaa pohjassa saadaksesi L3:n tai R3:n</string>
     <string name="ctrl_adaptive">Mukautuvat sauvat</string>
     <string name="ctrl_rumble">Pelin tärinä</string>
+    <string name="ctrl_dead_zone">Ohjaussauvan kuollut alue</string>
     <string name="ctrl_steam_button">Steam-painike</string>
     <string name="ctrl_qam_button">QAM-painike</string>
     <string name="ctrl_keyboard_button">Näppäimistöpainike</string>
@@ -1399,8 +1403,8 @@
     <string name="main_wadb_unavailable">Langaton virheenkorjaus ei ole käytettävissä</string>
     <string name="main_adb_copied">ADB-komento kopioitu</string>
     <string name="main_pick_roms">Valitse ROMs-kansio</string>
-    <string name="main_non_adreno_title">Ei Adreno-grafiikkapiiri</string>
-    <string name="main_non_adreno_text">Turnip tukee Adreno-grafiikkapiirejä. Laitteella %1$s Steam voi näyttää mustan ruudun. Latauksen koko: %2$.0f MB.</string>
+    <string name="main_non_adreno_title">GPU:ta ei tueta</string>
+    <string name="main_non_adreno_text">GPU:lle %1$s ei ole saatavilla yhteensopivaa grafiikkataustajärjestelmää. Steam saattaa näyttää mustan ruudun. Lataus: %2$.0f Mt.</string>
     <string name="main_install_anyway">Asenna silti</string>
     <string name="main_remove_runtime_title">Poista Linux-ajoympäristö</string>
     <string name="main_remove_runtime_text">Tämä poistaa ajoympäristön, siihen asennetun Steam-asiakasohjelman ja kaikki sinne asennetut pelit.</string>
@@ -2114,7 +2118,7 @@
     <string name="gpuinfo_experimental">Kokeellinen: sen ajurit ovat testiversioita</string>
     <string name="gpuinfo_a850_experimental">Kokeellinen Adreno 850 -tuki: vaatii yhteensopivat kokeelliset näyttö- ja peliajurit; ei vahvistettu tällä laitteella</string>
     <string name="gpuinfo_below_tested">Testatun laitteiston alapuolella (Adreno 725 ja uudemmat): ei välttämättä toimi</string>
-    <string name="gpuinfo_unsupported">Ei tuettu: DroidDeck vaatii Adreno (Snapdragon) -grafiikkapiirin</string>
+    <string name="gpuinfo_unsupported">Ei tuettu: tälle GPU:lle ei ole saatavilla yhteensopivaa grafiikkataustajärjestelmää</string>
 
     <string name="turnip_rate_limited">GitHubin käyttörajoitus tuli vastaan - yritä myöhemmin uudelleen</string>
     <string name="turnip_github_http">GitHub vastasi HTTP %1$d</string>
@@ -2225,9 +2229,6 @@
     <string name="source_added">Mukautettu</string>
     <string name="setup_stores">Kaupat</string>
     <string name="setup_stores_speed">Latausnopeuden taso</string>
-    <string name="setup_stores_engine">Kauppojen moottori</string>
-    <string name="setup_stores_engine_chip_ready">● Moottori valmis</string>
-    <string name="setup_stores_engine_chip_missing">Ei koottu</string>
     <string name="stores_tier_balanced">Tasapainotettu</string>
     <string name="stores_tier_fast">Nopea</string>
     <string name="stores_tier_max">Maksimi</string>

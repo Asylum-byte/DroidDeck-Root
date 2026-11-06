@@ -180,6 +180,7 @@
     <string name="app_fex_x86">%1$s prin FEX</string>
     <string name="app_fex_not_ready">Acest program este compilat pentru PC-uri %1$s și rulează prin FEX, care nu este încă configurat. Deschide Steam o dată, fiind autentificat: DroidDeck îl pune să descarce FEX și Steam Linux Runtime de care are nevoie, apoi acesta se deschide.</string>
     <string name="session_proot_missing">Proot-ul DroidDeck nu a putut fi descărcat. Verifică conexiunea și încearcă din nou. Sesiunea nu a fost pornită, deoarece proot-ul de rezervă este prea lent pentru jocuri.</string>
+    <string name="session_powervr_missing">Mediul grafic PowerVR nu a putut fi descărcat. Verifică conexiunea și încearcă din nou.</string>
     <string name="session_directaudio_missing">DirectAudio nu a putut fi descărcat, așa că sunetul jocurilor folosește calea mai lentă în această sesiune.</string>
     <string name="session_end_program">Acest program</string>
     <string name="session_end_steam_download">Clientul Steam nu a putut fi descărcat. Rețeaua sau VPN-ul tău poate bloca serverele Steam; verifică conexiunea și încearcă din nou.</string>
@@ -587,7 +588,7 @@
     <string name="perf_ram_cap_hint">Se aplică cât rulează clientul Steam, în modul Steam sau de pe desktop. Când sesiunea folosește mai mult de atât, Steam și apoi celelalte procese acceptate ale sesiunii sunt comprimate în zRAM. O limită flexibilă: nimic nu se închide, dar jocurile pot sacada cât paginile revin.</string>
     <string name="perf_ram_cap_unavailable">Necesită swap zRAM, pe care acest dispozitiv nu îl are.</string>
     <string name="perf_vram_cap">Limită VRAM</string>
-    <string name="perf_vram_cap_hint">Memoria video pe care DXVK o raportează jocurilor Direct3D, ca acestea să aloce mai puțin pentru texturi. Setările DXVK proprii ale unui joc au prioritate. Intră în vigoare la sesiunea următoare.</string>
+    <string name="perf_vram_cap_hint">Raportează acest buget de memorie video jocurilor Direct3D 9 până la 12 pentru a reduce utilizarea memoriei. Jocurile îl pot depăși; nu adaugă paginare GPU și nu garantează protecție împotriva blocărilor cauzate de lipsa memoriei. Se aplică din sesiunea următoare.</string>
     <string name="perf_gpuclock">Fixează GPU-ul la frecvența maximă</string>
     <string name="perf_gpuclock_hint">Doar Adreno. Mai puține întreruperi, consum mai mare de baterie și căldură.</string>
     <string name="perf_fixes">Remedieri de sesiune</string>
@@ -672,6 +673,8 @@
     <string name="hud_group_metrics">Valori</string>
     <string name="hud_metric_graph">Grafic timp de cadru</string>
     <string name="hud_metric_decimal">Rată de cadre cu zecimală</string>
+    <string name="hud_metric_low1">1% cele mai mici</string>
+    <string name="hud_metric_low01">0.1% cele mai mici</string>
     <string name="hud_metric_low001">0.01% cele mai mici</string>
     <string name="hud_metric_engine">Motor grafic</string>
     <string name="hud_metric_gpu_model">Nume GPU</string>
@@ -814,7 +817,7 @@
     <string name="setup_gpu_unsupported">GPU neacceptat</string>
     <string name="setup_gpu_detail">%1$s · %2$s</string>
     <string name="setup_gpu_untested_detail">%1$s: %2$s</string>
-    <string name="setup_gpu_unsupported_detail">Steam are nevoie de un driver Adreno; %1$s poate arăta un ecran negru</string>
+    <string name="setup_gpu_unsupported_detail">Nu este disponibil un backend grafic compatibil pentru %1$s. Steam poate afișa un ecran negru.</string>
     <string name="setup_runtime">Mediul de execuție Linux</string>
     <string name="setup_runtime_progress">%1$s · %2$d%%</string>
     <string name="setup_runtime_missing">Neinstalat · circa 3 GB, instalat la prima apăsare pe Play</string>
@@ -1112,6 +1115,7 @@
     <string name="ctrl_stick_click_hint">Apasă de două ori și ține apăsată o manșă pentru L3 sau R3</string>
     <string name="ctrl_adaptive">Manșe adaptive</string>
     <string name="ctrl_rumble">Vibrații de joc</string>
+    <string name="ctrl_dead_zone">Zonă moartă a manetei</string>
     <string name="ctrl_steam_button">Butonul Steam</string>
     <string name="ctrl_qam_button">Butonul QAM</string>
     <string name="ctrl_keyboard_button">Butonul tastaturii</string>
@@ -1411,8 +1415,8 @@
     <string name="main_wadb_unavailable">Depanarea wireless nu este disponibilă</string>
     <string name="main_adb_copied">Comanda ADB copiată</string>
     <string name="main_pick_roms">Alege folderul ROMs</string>
-    <string name="main_non_adreno_title">Nu este un GPU Adreno</string>
-    <string name="main_non_adreno_text">Turnip acceptă GPU-uri Adreno. Pe %1$s, Steam poate arăta un ecran negru. Descărcare: %2$.0f MB.</string>
+    <string name="main_non_adreno_title">GPU neacceptat</string>
+    <string name="main_non_adreno_text">Nu este disponibil un backend grafic compatibil pentru %1$s. Steam poate afișa un ecran negru. Descărcare: %2$.0f MB.</string>
     <string name="main_install_anyway">Instalează oricum</string>
     <string name="main_remove_runtime_title">Elimină mediul de execuție Linux</string>
     <string name="main_remove_runtime_text">Aceasta șterge mediul de execuție, clientul Steam din interiorul lui și fiecare joc instalat acolo.</string>
@@ -2139,7 +2143,7 @@
     <string name="gpuinfo_experimental">Experimental: driverele sale sunt versiuni de test</string>
     <string name="gpuinfo_a850_experimental">Suport experimental pentru Adreno 850: necesită drivere experimentale compatibile de afișaj și de jocuri; neverificat pe acest dispozitiv</string>
     <string name="gpuinfo_below_tested">Sub hardware-ul testat (Adreno 725 și mai nou): poate să nu ruleze</string>
-    <string name="gpuinfo_unsupported">Neacceptat: DroidDeck are nevoie de un GPU Adreno (Snapdragon)</string>
+    <string name="gpuinfo_unsupported">Neacceptat: nu este disponibil un backend grafic compatibil pentru acest GPU</string>
 
     <string name="turnip_rate_limited">S-a atins limita de solicitări a GitHub - încearcă din nou mai târziu</string>
     <string name="turnip_github_http">GitHub a răspuns cu HTTP %1$d</string>
@@ -2250,9 +2254,6 @@
     <string name="source_added">Personalizat</string>
     <string name="setup_stores">Magazine</string>
     <string name="setup_stores_speed">Nivelul vitezei de descărcare</string>
-    <string name="setup_stores_engine">Motorul magazinelor</string>
-    <string name="setup_stores_engine_chip_ready">● Motor pregătit</string>
-    <string name="setup_stores_engine_chip_missing">Necompilat</string>
     <string name="stores_tier_balanced">Echilibrat</string>
     <string name="stores_tier_fast">Rapid</string>
     <string name="stores_tier_max">Maxim</string>
