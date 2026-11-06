@@ -148,6 +148,27 @@ class SessionService : Service() {
         }
     }
 
+    /**
+     * Killed chroot sessions leave X display locks and sockets in the guest's /tmp, sometimes owned by root.
+     * With a fresh PID namespace the old pids in the locks can belong to live processes again, so Xwayland
+     * skips those displays; after enough sessions all 33 are taken and Steam no longer starts. No session
+     * runs at this point, so every one of them is stale.
+     */
+    private fun clearStaleXDisplays(sessionLog: File) {
+        val tmp = File(filesDir, "${LinuxRuntime.DIR}/tmp").path
+        val result = runCatching {
+            com.droiddeck.launcher.core.RootShell.run(listOf(
+                "n=0; for f in $tmp/.X[0-9]*-lock $tmp/.X11-unix/X[0-9]*; do [ -e \"\$f\" ] || [ -S \"\$f\" ] || continue; rm -f \"\$f\" && n=\$((n+1)); done; " +
+                    "[ -d $tmp/.X11-unix ] && chmod 1777 $tmp/.X11-unix; echo \$n",
+            ), 10).lastLine.trim()
+        }.getOrNull()
+        if (result != null && result != "0") {
+            val line = "== /tmp: removed $result stale X display locks/sockets"
+            Log.i(TAG, line)
+            runCatching { sessionLog.appendText(line + "\n") }
+        }
+    }
+
     private fun readScreenOn(interactive: Boolean? = null): Boolean {
         val id = sessionDisplayId
         val state = if (id == Display.DEFAULT_DISPLAY) null
@@ -498,6 +519,7 @@ class SessionService : Service() {
         Log.i(TAG, prootLine)
         runCatching { sessionLog.appendText(prootLine + "\n") }
             .onFailure { Log.w(TAG, "could not write the proot line to ${sessionLog.path}", it) }
+        if (com.droiddeck.launcher.runtime.ChrootMode.active(this)) clearStaleXDisplays(sessionLog)
 
         Log.i(TAG, GpuClockPin.start(this))
         val rootLine: (String) -> Unit = { line ->
