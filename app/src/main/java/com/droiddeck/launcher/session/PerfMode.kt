@@ -12,7 +12,7 @@ import android.view.Display
 object PerfMode {
     private const val TAG = "PerfMode"
 
-    fun apply(a: Activity, fpsLimit: Int = 0, refreshLimit: Int = 0): String {
+    fun apply(a: Activity, fpsLimit: Int = 0, refreshLimit: Int = 0, preferLow: Boolean = false): String {
         val parts = ArrayList<String>(2)
 
         parts += try {
@@ -20,7 +20,7 @@ object PerfMode {
             if (display == null || Build.VERSION.SDK_INT < 23) "display mode unchanged" else {
                 val cur = display.mode
                 val cap = minOf(peakRefreshCap(a), refreshLimit.takeIf { it > 0 }?.toFloat() ?: Float.POSITIVE_INFINITY)
-                val best = selectMode(display.supportedModes, cur, fpsLimit, cap)
+                val best = selectMode(display.supportedModes, cur, fpsLimit, cap, preferLow)
                 if (best != null && a.window.attributes.preferredDisplayModeId != best.modeId) {
                     a.window.attributes = a.window.attributes.apply { preferredDisplayModeId = best.modeId }
                     "display ${cur.refreshRate.toInt()} → ${best.refreshRate.toInt()} Hz (mode ${best.modeId})"
@@ -54,11 +54,14 @@ object PerfMode {
         return if (peak >= 1f) peak else Float.POSITIVE_INFINITY
     }
 
-    internal fun selectMode(modes: Array<Display.Mode>, current: Display.Mode, fpsLimit: Int, cap: Float): Display.Mode? {
+    internal fun selectMode(modes: Array<Display.Mode>, current: Display.Mode, fpsLimit: Int, cap: Float,
+                            preferLow: Boolean = false): Display.Mode? {
         val sameSize = modes.filter {
             it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight
         }
         val allowed = sameSize.filter { it.refreshRate <= cap + 0.5f }
+        // A game capped below the panel rate only needs the slowest mode its frames divide evenly into.
+        if (preferLow && fpsLimit > 0) allowed.filter { cadenceFits(it.refreshRate, fpsLimit) }.minByOrNull { it.refreshRate }?.let { return it }
         return allowed.filter { cadenceFits(it.refreshRate, fpsLimit) }.maxByOrNull { it.refreshRate }
             ?: allowed.maxByOrNull { it.refreshRate }
             ?: sameSize.minByOrNull { it.refreshRate }

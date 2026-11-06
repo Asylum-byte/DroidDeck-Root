@@ -13,8 +13,9 @@ object RootGameProfiles {
     private const val GAME_FILE = "droiddeck-game"
     private const val POLL_MS = 2000L
 
-    data class Profile(val gpuCapMhz: Int = INHERIT, val cpuCapPercent: Int = INHERIT, val boost: Int = INHERIT) {
-        val empty: Boolean get() = gpuCapMhz == INHERIT && cpuCapPercent == INHERIT && boost == INHERIT
+    data class Profile(val gpuCapMhz: Int = INHERIT, val cpuCapPercent: Int = INHERIT, val boost: Int = INHERIT,
+                       val primeCapPercent: Int = INHERIT) {
+        val empty: Boolean get() = gpuCapMhz == INHERIT && cpuCapPercent == INHERIT && boost == INHERIT && primeCapPercent == INHERIT
     }
 
     data class Effective(val perf: RootPerfProfile.Settings, val boost: Int)
@@ -22,12 +23,13 @@ object RootGameProfiles {
     fun get(context: Context, scope: String): Profile {
         val raw = prefs(context).getString(scope, null) ?: return Profile()
         val parts = raw.split(',').map { it.trim().toIntOrNull() ?: INHERIT }
-        return Profile(parts.getOrElse(0) { INHERIT }, parts.getOrElse(1) { INHERIT }, parts.getOrElse(2) { INHERIT })
+        return Profile(parts.getOrElse(0) { INHERIT }, parts.getOrElse(1) { INHERIT }, parts.getOrElse(2) { INHERIT },
+            parts.getOrElse(3) { INHERIT })
     }
 
     fun set(context: Context, scope: String, profile: Profile) {
         prefs(context).edit().apply {
-            if (profile.empty) remove(scope) else putString(scope, "${profile.gpuCapMhz},${profile.cpuCapPercent},${profile.boost}")
+            if (profile.empty) remove(scope) else putString(scope, "${profile.gpuCapMhz},${profile.cpuCapPercent},${profile.boost},${profile.primeCapPercent}")
         }.apply()
     }
 
@@ -38,6 +40,7 @@ object RootGameProfiles {
             global.copy(
                 gpuCapMhz = game.gpuCapMhz.takeIf { it != INHERIT } ?: global.gpuCapMhz,
                 cpuCapPercent = game.cpuCapPercent.takeIf { it != INHERIT } ?: global.cpuCapPercent,
+                primeCapPercent = game.primeCapPercent.takeIf { it != INHERIT } ?: global.primeCapPercent,
             ),
             game.boost.takeIf { it != INHERIT } ?: SessionPrefs.rootGameBoost(context),
         )
@@ -80,6 +83,21 @@ object RootGameProfiles {
         return applyNow(context, base)
     }
 
+    /** The running game's own FPS limit (DXVK/VKD3D variable), so the display can follow it. */
+    private fun publishFpsLimit(context: Context, scope: String?) {
+        val fps = scope?.let { s ->
+            runCatching {
+                val config = GameEnvironmentStore.read(context)
+                val vars = config.shared + config.games[s].orEmpty()
+                listOf("VKD3D_FRAME_RATE", "DXVK_FRAME_RATE").firstNotNullOfOrNull { vars[it]?.trim()?.toIntOrNull()?.takeIf { n -> n in 15..240 } }
+            }.getOrNull()
+        } ?: 0
+        if (fps != SessionState.gameFpsLimit) {
+            SessionState.gameFpsLimit = fps
+            SessionState.onGameFpsLimit?.invoke()
+        }
+    }
+
     fun runningScope(context: Context): String? =
         if (!SessionState.running) null else runCatching { File(context.filesDir, ".wayland-rt/$GAME_FILE").readText().trim() }.getOrNull()
             ?.takeIf { it.matches(Regex("[1-9][0-9]{0,9}")) }
@@ -101,6 +119,7 @@ object RootGameProfiles {
                 val scope = runCatching { file.readText().trim() }.getOrNull()?.takeIf { it.matches(Regex("[1-9][0-9]{0,9}")) }
                 if (scope != current) {
                     current = scope
+                    publishFpsLimit(app, scope)
                     val next = effective(app, scope)
                     if (next != applied) report("game profile ${scope ?: "none (global)"}: ${applyNow(app, next)}")
                     else Log.i(TAG, "game ${scope ?: "-"} uses the global root settings")
@@ -116,6 +135,7 @@ object RootGameProfiles {
         watcher = null
         applied = null
         onDevice = null
+        SessionState.gameFpsLimit = 0
         thermalCapMhz = 0
         // The guest's cleanup child dies with the session, so the marker is removed here too.
         gameFile?.delete()

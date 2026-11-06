@@ -116,6 +116,14 @@ object SessionState {
     @Volatile
     var fpsLimit: Int = 0
 
+    /** FPS limit the running game sets itself (DXVK/VKD3D variable); 0 = none or unknown. */
+    @Volatile
+    var gameFpsLimit: Int = 0
+
+    /** Called (from any thread) when gameFpsLimit changes. */
+    @Volatile
+    var onGameFpsLimit: (() -> Unit)? = null
+
     @Volatile
     var firstFrameSeen = false
 

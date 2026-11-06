@@ -54,6 +54,8 @@ fun PerformancePage(
     rootSoftThrottle: Boolean,
     rootGpuCapMhz: Int,
     rootCpuCapPercent: Int,
+    rootPrimeCapPercent: Int,
+    matchRefresh: Boolean,
     ramCapMb: Int,
     zramClient: Boolean,
     vramCapMb: Int,
@@ -83,6 +85,8 @@ fun PerformancePage(
     onRootSoftThrottle: (Boolean) -> Unit,
     onRootGpuCapMhz: (Int) -> Unit,
     onRootCpuCapPercent: (Int) -> Unit,
+    onRootPrimeCapPercent: (Int) -> Unit,
+    onMatchRefresh: (Boolean) -> Unit,
     onRamCapMb: (Int) -> Unit,
     onZramClient: (Boolean) -> Unit,
     onVramCapMb: (Int) -> Unit,
@@ -175,6 +179,19 @@ fun PerformancePage(
                     pct to if (pct == 0) stringResource(R.string.perf_root_cap_off) else stringResource(R.string.perf_root_cpu_cap_percent, pct)
                 },
                 rootCpuCapPercent, onPick = onRootCpuCapPercent,
+            )
+            ChoiceRow(
+                host, "rootprimecap", stringResource(R.string.perf_root_prime_cap),
+                stringResource(R.string.perf_root_prime_cap_hint),
+                com.droiddeck.launcher.session.RootPerfProfile.PRIME_CAPS.map { pct ->
+                    pct to if (pct == 0) stringResource(R.string.perf_root_cap_off) else stringResource(R.string.perf_root_cpu_cap_percent, pct)
+                },
+                rootPrimeCapPercent, onPick = onRootPrimeCapPercent,
+            )
+            ToggleRow(
+                host, "matchrefresh", stringResource(R.string.perf_match_refresh),
+                stringResource(R.string.perf_match_refresh_hint),
+                matchRefresh, onChange = onMatchRefresh,
             )
             ChoiceRow(
                 host, "rootboost", stringResource(R.string.perf_root_boost),

@@ -184,6 +184,8 @@ class FrontEndActivity : ComponentActivity() {
     private var rootSoftThrottle by mutableStateOf(false)
     private var rootGpuCapMhz by mutableStateOf(0)
     private var rootCpuCapPercent by mutableStateOf(0)
+    private var rootPrimeCapPercent by mutableStateOf(0)
+    private var matchRefresh by mutableStateOf(true)
     private var prootNoSeccomp by mutableStateOf(false)
     private var prootFastPath by mutableStateOf(true)
     private var cursorComposite by mutableStateOf(false)
@@ -2479,6 +2481,7 @@ class FrontEndActivity : ComponentActivity() {
             gpuClockPin = gpuClockPin,
             rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom, rootChroot = rootChroot, rootGameBoost = rootGameBoost, rootSoftThrottle = rootSoftThrottle,
             rootGpuCapMhz = rootGpuCapMhz, rootCpuCapPercent = rootCpuCapPercent,
+            rootPrimeCapPercent = rootPrimeCapPercent, matchRefresh = matchRefresh,
             ramCapMb = ramCapMb, vramCapMb = vramCapMb, zramClient = zramClient,
             deviceRamMb = (android.app.ActivityManager.MemoryInfo()
                 .also((getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager)::getMemoryInfo).totalMem / (1024 * 1024)).toInt(),
@@ -2508,6 +2511,8 @@ class FrontEndActivity : ComponentActivity() {
             onRootSoftThrottle = { on -> SessionPrefs.setRootSoftThrottle(this, on); rootSoftThrottle = on },
             onRootGpuCapMhz = { mhz -> SessionPrefs.setRootGpuCapMhz(this, mhz); rootGpuCapMhz = mhz },
             onRootCpuCapPercent = { pct -> SessionPrefs.setRootCpuCapPercent(this, pct); rootCpuCapPercent = pct },
+            onRootPrimeCapPercent = { pct -> SessionPrefs.setRootPrimeCapPercent(this, pct); rootPrimeCapPercent = pct },
+            onMatchRefresh = { on -> SessionPrefs.setMatchRefreshToGame(this, on); matchRefresh = on },
             onRootChroot = { on ->
                 SessionPrefs.setRootChroot(this, on); rootChroot = on
                 if (on) Thread({ com.droiddeck.launcher.runtime.ChrootMode.prepare(this) }, "root-chroot").start()
@@ -2743,6 +2748,8 @@ class FrontEndActivity : ComponentActivity() {
         rootSoftThrottle = SessionPrefs.rootSoftThrottle(this)
         rootGpuCapMhz = SessionPrefs.rootGpuCapMhz(this)
         rootCpuCapPercent = SessionPrefs.rootCpuCapPercent(this)
+        rootPrimeCapPercent = SessionPrefs.rootPrimeCapPercent(this)
+        matchRefresh = SessionPrefs.matchRefreshToGame(this)
         prootNoSeccomp = SessionPrefs.prootNoSeccomp(this)
         prootFastPath = SessionPrefs.prootFastPath(this)
         cursorComposite = SessionPrefs.cursorComposite(this)

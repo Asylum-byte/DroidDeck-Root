@@ -508,6 +508,7 @@ class SessionService : Service() {
         Thread({ rootLine(RootGameBoost.start(this)) }, "root-boost-start").start()
         RootGameProfiles.watch(this, File(filesDir, ".wayland-rt"), rootLine)
         RootSoftThrottle.start(this, rootLine)
+        RootThermalLog.start(this)
         Log.i(TAG, GameThreadHints.start(this))
 
         val size = SessionState.outputSize
@@ -1940,6 +1941,7 @@ class SessionService : Service() {
         SessionState.stopRequested = false
         GpuClockPin.stop(this)
         RootSoftThrottle.stop()
+        RootThermalLog.stop()
         RootGameProfiles.unwatch()
         Thread({ RootPerfProfile.stop(this) }, "root-perf-stop").start()
         Thread({ RootGameBoost.stop(this) }, "root-boost-stop").start()

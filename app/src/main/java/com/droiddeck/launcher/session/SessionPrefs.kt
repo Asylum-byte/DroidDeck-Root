@@ -733,6 +733,19 @@ object SessionPrefs {
         prefs(context).edit().putInt("rootCpuCapPercent", percent).apply()
     }
 
+    fun rootPrimeCapPercent(context: Context): Int = prefs(context).getInt("rootPrimeCapPercent", 0)
+
+    fun setRootPrimeCapPercent(context: Context, percent: Int) {
+        prefs(context).edit().putInt("rootPrimeCapPercent", percent).apply()
+    }
+
+    /** Switch the display to the lowest refresh rate that fits a game's own FPS limit. */
+    fun matchRefreshToGame(context: Context): Boolean = prefs(context).getBoolean("matchRefreshToGame", true)
+
+    fun setMatchRefreshToGame(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("matchRefreshToGame", on).apply()
+    }
+
     fun rootSoftThrottle(context: Context): Boolean = prefs(context).getBoolean("rootSoftThrottle", false)
 
     fun setRootSoftThrottle(context: Context, on: Boolean) {

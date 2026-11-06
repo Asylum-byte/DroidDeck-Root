@@ -27,6 +27,7 @@ internal object AgentRoot {
                 pick(request, "gpuCapMhz", RootPerfProfile.GPU_CAPS, old.gpuCapMhz),
                 pick(request, "cpuCapPercent", RootPerfProfile.CPU_CAPS, old.cpuCapPercent),
                 pick(request, "boost", RootGameBoost.LEVELS, old.boost),
+                pick(request, "primeCapPercent", RootPerfProfile.PRIME_CAPS, old.primeCapPercent),
             )
             RootGameProfiles.set(context, scope, next)
             profile(context, scope)
@@ -35,6 +36,8 @@ internal object AgentRoot {
             request.optJSONObject("values")?.let { v ->
                 if (v.has("gpuCapMhz")) SessionPrefs.setRootGpuCapMhz(context, checked(v.getInt("gpuCapMhz"), RootPerfProfile.GPU_CAPS))
                 if (v.has("cpuCapPercent")) SessionPrefs.setRootCpuCapPercent(context, checked(v.getInt("cpuCapPercent"), RootPerfProfile.CPU_CAPS))
+                if (v.has("primeCapPercent")) SessionPrefs.setRootPrimeCapPercent(context, checked(v.getInt("primeCapPercent"), RootPerfProfile.PRIME_CAPS))
+                if (v.has("matchRefresh")) SessionPrefs.setMatchRefreshToGame(context, v.getBoolean("matchRefresh"))
                 if (v.has("boost")) SessionPrefs.setRootGameBoost(context, checked(v.getInt("boost"), RootGameBoost.LEVELS))
                 if (v.has("fan")) SessionPrefs.setRootFanMax(context, v.getBoolean("fan"))
                 if (v.has("profile")) SessionPrefs.setRootPerfProfile(context,
@@ -52,6 +55,7 @@ internal object AgentRoot {
             status(context)
         }
         "frames" -> frames()
+        "thermal" -> thermal(context, request)
         "env" -> env(context, request)
         "trial" -> {
             val scope = RootGameProfiles.runningScope(context) ?: throw AgentException("NO_GAME", "No game is running")
@@ -60,6 +64,7 @@ internal object AgentRoot {
                 base.perf.copy(
                     gpuCapMhz = if (request.has("gpuCapMhz")) checked(request.getInt("gpuCapMhz"), RootPerfProfile.GPU_CAPS) else base.perf.gpuCapMhz,
                     cpuCapPercent = if (request.has("cpuCapPercent")) checked(request.getInt("cpuCapPercent"), RootPerfProfile.CPU_CAPS) else base.perf.cpuCapPercent,
+                    primeCapPercent = if (request.has("primeCapPercent")) checked(request.getInt("primeCapPercent"), RootPerfProfile.PRIME_CAPS) else base.perf.primeCapPercent,
                 ),
                 if (request.has("boost")) checked(request.getInt("boost"), RootGameBoost.LEVELS) else base.boost,
             )
@@ -70,7 +75,7 @@ internal object AgentRoot {
             JSONObject().put("scope", scope ?: JSONObject.NULL)
                 .put("applied", RootGameProfiles.applyNow(context, RootGameProfiles.effective(context, scope)))
         }
-        else -> throw AgentException("INVALID_REQUEST", "root op '$op' is not status, games, get, set, global, frames, env, trial or trialEnd")
+        else -> throw AgentException("INVALID_REQUEST", "root op '$op' is not status, games, get, set, global, frames, thermal, env, trial or trialEnd")
     }.put("ok", true).put("command", "root")
 
     private fun frames(): JSONObject {
@@ -89,6 +94,23 @@ internal object AgentRoot {
             .put("low01Fps", lows.low01Fps.toDouble())
             .put("frames", stats.count)
             .put("graphMs", JSONArray().apply { graph.forEach { put(it.toDouble()) } })
+    }
+
+    /** Session thermal logs: the list, and the CSV of one (latest by default). */
+    private fun thermal(context: Context, request: JSONObject): JSONObject {
+        val dir = com.droiddeck.launcher.session.RootThermalLog.dir(context)
+        val files = dir.listFiles { f -> f.name.matches(Regex("[0-9]{10,16}\\.csv")) }?.sortedByDescending { it.name }.orEmpty()
+        val wanted = request.optString("session").takeIf { it.matches(Regex("[0-9]{10,16}")) }
+        val file = wanted?.let { w -> files.firstOrNull { it.name == "$w.csv" } } ?: files.firstOrNull()
+        val current = com.droiddeck.launcher.session.RootThermalLog.currentFile
+        val sessions = JSONArray()
+        files.take(30).forEach { f ->
+            sessions.put(JSONObject().put("id", f.nameWithoutExtension).put("bytes", f.length())
+                .put("running", current?.name == f.name))
+        }
+        return JSONObject().put("sessions", sessions)
+            .put("session", file?.nameWithoutExtension ?: JSONObject.NULL)
+            .put("csv", file?.let { f -> f.readText().takeLast(400_000) } ?: "")
     }
 
     private const val BACKUPS = 15
@@ -155,14 +177,19 @@ internal object AgentRoot {
         return JSONObject()
             .put("global", JSONObject()
                 .put("profile", g.profile).put("fan", g.fan).put("gpuCapMhz", g.gpuCapMhz)
-                .put("cpuCapPercent", g.cpuCapPercent).put("boost", SessionPrefs.rootGameBoost(context))
+                .put("cpuCapPercent", g.cpuCapPercent).put("primeCapPercent", g.primeCapPercent)
+                .put("boost", SessionPrefs.rootGameBoost(context))
+                .put("matchRefresh", SessionPrefs.matchRefreshToGame(context))
                 .put("chroot", SessionPrefs.rootChroot(context))
                 .put("softThrottle", SessionPrefs.rootSoftThrottle(context)))
             .put("thermalCapMhz", RootGameProfiles.thermalCapMhz)
+            .put("gameFpsLimit", com.droiddeck.launcher.session.SessionState.gameFpsLimit)
+            .put("refreshHz", com.droiddeck.launcher.session.SessionState.refreshHz.toDouble())
             .put("runningGame", running ?: JSONObject.NULL)
             .put("options", JSONObject()
                 .put("gpuCapMhz", JSONArray(RootPerfProfile.GPU_CAPS))
                 .put("cpuCapPercent", JSONArray(RootPerfProfile.CPU_CAPS))
+                .put("primeCapPercent", JSONArray(RootPerfProfile.PRIME_CAPS))
                 .put("boost", JSONArray(RootGameBoost.LEVELS)))
     }
 
@@ -185,13 +212,15 @@ internal object AgentRoot {
         val effective = RootGameProfiles.effective(context, scope)
         return JSONObject().put("scope", scope).put("profile", encode(RootGameProfiles.get(context, scope)))
             .put("effective", JSONObject().put("gpuCapMhz", effective.perf.gpuCapMhz)
-                .put("cpuCapPercent", effective.perf.cpuCapPercent).put("boost", effective.boost))
+                .put("cpuCapPercent", effective.perf.cpuCapPercent).put("primeCapPercent", effective.perf.primeCapPercent)
+                .put("boost", effective.boost))
     }
 
     private fun encode(p: RootGameProfiles.Profile) = JSONObject()
         .put("gpuCapMhz", p.gpuCapMhz.takeIf { it != INHERIT } ?: JSONObject.NULL)
         .put("cpuCapPercent", p.cpuCapPercent.takeIf { it != INHERIT } ?: JSONObject.NULL)
         .put("boost", p.boost.takeIf { it != INHERIT } ?: JSONObject.NULL)
+        .put("primeCapPercent", p.primeCapPercent.takeIf { it != INHERIT } ?: JSONObject.NULL)
 
     private fun scope(request: JSONObject): String = request.optString("scope").takeIf { it.matches(Regex("[1-9][0-9]{0,9}")) }
         ?: throw AgentException("INVALID_REQUEST", "scope must be the game's profile key (decimal)")

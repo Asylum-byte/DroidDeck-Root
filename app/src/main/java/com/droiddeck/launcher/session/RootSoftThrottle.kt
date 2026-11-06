@@ -46,7 +46,7 @@ object RootSoftThrottle {
     private data class Reading(val skin: Double?, val gpu: Double?, val androidLevel: Int?)
 
     /** Finds the skin sensor's thermal zone once (sysfs thermal is root-only under SELinux). */
-    private fun findSkinZone(): String? {
+    internal fun findSkinZone(): String? {
         val out = RootShell.run(listOf("for z in /sys/class/thermal/thermal_zone*; do echo \"\$z \$(cat \$z/type)\"; done"), 10).output
         val zones = out.lines().mapNotNull { l -> l.trim().split(' ').takeIf { it.size == 2 }?.let { it[1] to it[0] } }.toMap()
         return SKIN_TYPES.firstNotNullOfOrNull { zones[it] }

@@ -2342,8 +2342,23 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
     private fun outputFpsLimit(pip: Boolean): Int =
         SessionPrefs.compositorFpsLimit(mirrorRefreshLimit(), if (noSteamSession()) SessionState.fpsLimit else 0, pip)
 
+    /**
+     * A game that caps its own frame rate (DXVK/VKD3D variable) doesn't need the panel at full speed: the
+     * slowest refresh rate its frames divide evenly into saves power in the panel and the compositor.
+     * Skipped while frame generation runs, which needs the higher rate.
+     */
+    private fun gameDisplayFps(): Int {
+        val game = SessionState.gameFpsLimit
+        if (game <= 0 || !SessionPrefs.matchRefreshToGame(this) || mirrorRefreshLimit() > 0) return 0
+        val frameGenOff = runCatching { com.droiddeck.launcher.gpu.FrameGen.mode(this).engine == com.droiddeck.launcher.gpu.FrameGen.Mode.OFF.engine }.getOrDefault(false)
+        return if (frameGenOff) game else 0
+    }
+
     private fun applyOutputPacing() {
-        Log.i(TAG, "perf: " + PerfMode.apply(this, outputFpsLimit(false), mirrorRefreshLimit()))
+        val own = outputFpsLimit(false)
+        val game = if (own > 0) 0 else gameDisplayFps()
+        Log.i(TAG, "perf: " + PerfMode.apply(this, if (own > 0) own else game, mirrorRefreshLimit(), preferLow = game > 0) +
+            if (game > 0) " (game limit $game fps)" else "")
         if (CompositorHost.isStarted) {
             val hz = refreshHz()
             val changed = kotlin.math.abs(SessionState.refreshHz - hz) > 0.1f
@@ -4308,6 +4323,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     override fun onResume() {
         super.onResume()
+        SessionState.onGameFpsLimit = { runOnUiThread { if (!isFinishing) applyOutputPacing() } }
         com.droiddeck.launcher.input.SystemKeyCapture.attach(this, { hasWindowFocus() && !appUiOwnsPointer() && CompositorHost.isStarted }) { event ->
             com.droiddeck.launcher.input.GuestKeys.send(event, ::sendGuestKey)
         }
@@ -4971,6 +4987,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     override fun onDestroy() {
+        SessionState.onGameFpsLimit = null
         com.droiddeck.launcher.input.HomeButtonShortcuts.detach(this)
         relativeMouseRequests.shutdownNow()
         backQamInput.cancel()

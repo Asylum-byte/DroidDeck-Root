@@ -17,6 +17,8 @@ object RootPerfProfile {
     private const val EFFICIENT_SHARE = 0.75
     val GPU_CAPS = listOf(0, 1000, 900, 800, 700)
     val CPU_CAPS = listOf(0, 90, 80, 70)
+    /** Extra limit for the fastest cluster only (the two prime cores), which burns the most per MHz. */
+    val PRIME_CAPS = listOf(0, 80, 70, 60, 50)
 
     // Nubia/RedMagic kernels expose the built-in fan here; other devices simply lack the nodes.
     private const val FAN_ENABLE = "/sys/kernel/fan/fan_enable"
@@ -25,13 +27,14 @@ object RootPerfProfile {
 
     private val NODE = Regex("^/sys/[A-Za-z0-9_./-]+$")
 
-    data class Settings(val profile: String, val fan: Boolean, val gpuCapMhz: Int, val cpuCapPercent: Int) {
-        val off: Boolean get() = profile == OFF && !fan && gpuCapMhz <= 0 && cpuCapPercent <= 0
+    data class Settings(val profile: String, val fan: Boolean, val gpuCapMhz: Int, val cpuCapPercent: Int, val primeCapPercent: Int = 0) {
+        val off: Boolean get() = profile == OFF && !fan && gpuCapMhz <= 0 && cpuCapPercent <= 0 && primeCapPercent <= 0
     }
 
     fun globalSettings(context: Context) = Settings(
         SessionPrefs.rootPerfProfile(context), SessionPrefs.rootFanMax(context),
         SessionPrefs.rootGpuCapMhz(context), SessionPrefs.rootCpuCapPercent(context),
+        SessionPrefs.rootPrimeCapPercent(context),
     )
 
     /** Swaps the running session over to other settings, undoing the previous ones first. */
@@ -57,7 +60,7 @@ object RootPerfProfile {
             .split(Regex("\\s+")).mapNotNull { it.toLongOrNull() }
         val capLevel = if (gpuCap > 0) gpuCapLevel(gpuFreqs, gpuCap) else null
         if (gpuCap > 0 && capLevel == null) Log.w(TAG, "gpu cap $gpuCap MHz: no frequency table (${gpuFreqs.size} entries)")
-        val writes = plan(profile, fan, present, gpuLevels, capLevel, cpuCap).toMutableList()
+        val writes = plan(profile, fan, present, gpuLevels, capLevel, cpuCap, settings.primeCapPercent).toMutableList()
         val capMhz = capLevel?.let { (gpuFreqs[it] / 1_000_000).toInt() } ?: gpuCap.takeIf { it > 0 }
         if (capMhz != null && "$KGSL/max_clock_mhz" in present) writes += "$KGSL/max_clock_mhz" to capMhz.toString()
         if (writes.isEmpty()) return "root perf: nothing to change on this device"
@@ -74,6 +77,7 @@ object RootPerfProfile {
         val caps = listOfNotNull(
             capMhz?.let { "gpu <= $it MHz" + if (capLevel == null) " (no level table, clock node only)" else "" },
             cpuCap.takeIf { it > 0 }?.let { "cpu <= $it %" },
+            settings.primeCapPercent.takeIf { it > 0 }?.let { "prime <= $it %" },
         ).joinToString(", ")
         val summary = "root perf: $profile${if (fan) " + fan" else ""}${if (caps.isNotEmpty()) ", $caps" else ""}, ${writes.size} nodes"
         return if (applied.ok) summary else "$summary (some writes refused: ${applied.output.trim().take(200)})"
@@ -175,7 +179,7 @@ object RootPerfProfile {
     }
 
     private fun plan(profile: String, fan: Boolean, present: Set<String>, gpuLevels: Long?,
-                     gpuCapLevel: Int?, cpuCapPercent: Int): List<Pair<String, String>> {
+                     gpuCapLevel: Int?, cpuCapPercent: Int, primeCapPercent: Int = 0): List<Pair<String, String>> {
         val writes = ArrayList<Pair<String, String>>()
         val policies = File(CPUFREQ).listFiles { f -> f.name.startsWith("policy") }?.sortedBy { it.name }.orEmpty()
         val cpuShare = when {
@@ -183,9 +187,15 @@ object RootPerfProfile {
             profile == EFFICIENT -> EFFICIENT_SHARE
             else -> null
         }
+        val tops = policies.associateWith { readLong(File(it, "cpuinfo_max_freq")) }
+        val primeTop = tops.values.filterNotNull().maxOrNull()
+        // Only a real big/prime split counts: with one cluster the prime limit would just be a second CPU limit.
+        val primePolicy = policies.takeIf { primeCapPercent > 0 && tops.values.filterNotNull().distinct().size > 1 }
+            ?.firstOrNull { tops[it] == primeTop }
         val cpuCaps = policies.associateWith { p ->
-            val top = readLong(File(p, "cpuinfo_max_freq"))
-            if (top == null || cpuShare == null) null else nearestBelow(p, (top * cpuShare).toLong())
+            val top = tops[p]
+            val share = listOfNotNull(cpuShare, (primeCapPercent / 100.0).takeIf { p == primePolicy }).minOrNull()
+            if (top == null || share == null) null else nearestBelow(p, (top * share).toLong())
         }
         policies.forEach { p ->
             val top = readLong(File(p, "cpuinfo_max_freq")) ?: return@forEach

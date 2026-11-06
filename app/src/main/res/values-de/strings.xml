@@ -609,6 +609,13 @@
     <string name="perf_root_cpu_cap_percent">bis %1$d %%</string>
     <string name="perf_root_cap_off">Keine Grenze</string>
     <string name="game_root_note">Braucht Root. Gilt immer, wenn dieses Spiel läuft, auch wenn du es in Steam startest, und wird nach dem Beenden zurückgesetzt.</string>
+    <string name="perf_root_prime_cap">Prime-Kern-Grenze</string>
+    <string name="perf_root_prime_cap_hint">Braucht Root. Begrenzt nur den schnellsten CPU-Cluster (die Prime-Kerne), der pro MHz am meisten Strom zieht; die anderen Kerne behalten ihren Takt. Wirkt zusätzlich zur CPU-Taktgrenze.</string>
+    <string name="perf_match_refresh">Bildrate ans FPS-Limit des Spiels anpassen</string>
+    <string name="perf_match_refresh_hint">Setzt ein Spiel sein eigenes FPS-Limit (DXVK_FRAME_RATE / VKD3D_FRAME_RATE), schaltet das Display auf die niedrigste passende Bildwiederholrate, z. B. 60 Hz bei 60 FPS, 90 Hz bei 45 FPS. Spart Strom; aus, solange Frame-Generation läuft.</string>
+    <string name="thermal_channel">Hitzewarnungen</string>
+    <string name="thermal_hot_title">Handy ist heiß</string>
+    <string name="thermal_hot_text">Gehäuse %1$s °C bei %2$s W – Android drosselt jetzt den GPU-Takt. Ein niedrigeres FPS-Limit oder die sanfte Drosselung hält es kühler.</string>
     <string name="perf_root_soft">Sanfte Drosselung</string>
     <string name="perf_root_soft_hint">Braucht Root. Senkt die GPU-Grenze schrittweise, wenn es warm wird (Gehäuse 41,5 °C – Android kappt bei ca. 43 °C), damit die FPS sanft sinken statt dass Android den Takt schlagartig kappt. Gibt nach dem Abkühlen wieder frei.</string>
     <string name="perf_root_boost">CPU-Boost für Spiele</string>

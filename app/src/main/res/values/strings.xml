@@ -656,6 +656,13 @@
     <string name="perf_root_cpu_cap_percent">up to %1$d %%</string>
     <string name="perf_root_cap_off">No limit</string>
     <string name="game_root_note">Needs root. Applies whenever this game runs, also when started from inside Steam, and switches back when it exits.</string>
+    <string name="perf_root_prime_cap">Prime core limit</string>
+    <string name="perf_root_prime_cap_hint">Needs root. Caps only the fastest CPU cluster (the prime cores), which uses the most power per MHz, while the other cores keep their clock. Stacks with the CPU clock limit.</string>
+    <string name="perf_match_refresh">Match display to game FPS limit</string>
+    <string name="perf_match_refresh_hint">When a game sets its own FPS limit (DXVK_FRAME_RATE / VKD3D_FRAME_RATE), the display switches to the slowest refresh rate the frames fit evenly, e.g. 60 Hz for 60 FPS, 90 Hz for 45 FPS. Saves power; off while frame generation runs.</string>
+    <string name="thermal_channel">Heat warnings</string>
+    <string name="thermal_hot_title">Phone is hot</string>
+    <string name="thermal_hot_text">Skin %1$s °C at %2$s W – Android is cutting the GPU clock now. A lower FPS limit or the soft throttle keeps it cooler.</string>
     <string name="perf_root_soft">Soft throttle</string>
     <string name="perf_root_soft_hint">Needs root. Lowers the GPU limit step by step as it warms (skin 41.5 °C – Android cuts at about 43 °C) so frame rates sink gently instead of Android cutting the clock at once. Gives it back once cooled.</string>
     <string name="perf_root_boost">CPU boost for games</string>
