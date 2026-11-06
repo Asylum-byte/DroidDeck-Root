@@ -588,6 +588,12 @@
     <string name="perf_vram_cap_hint">Der Grafikspeicher, den DXVK an Direct3D-Spiele meldet, damit sie weniger für Texturen einplanen. Eigene DXVK-Einstellungen eines Spiels haben Vorrang. Gilt ab der nächsten Sitzung.</string>
     <string name="perf_gpuclock">GPU auf höchstem Takt halten</string>
     <string name="perf_gpuclock_hint">Nur Adreno. Weniger Ruckler, mehr Akkuverbrauch und Wärme.</string>
+    <string name="setup_fan">Eingebauter Lüfter</string>
+    <string name="setup_fan_hint">Braucht Root. Schaltet den RedMagic-Lüfter sofort an (volle Stufe) oder aus, z. B. wenn er nach einer Sitzung weiterläuft.</string>
+    <string name="setup_fan_button">An / Aus</string>
+    <string name="setup_fan_now_on">Lüfter an</string>
+    <string name="setup_fan_now_off">Lüfter aus</string>
+    <string name="setup_fan_unavailable">Keine Lüftersteuerung (braucht Root und einen Lüfter)</string>
     <string name="setup_quit_group">App</string>
     <string name="setup_quit">DroidDeck beenden</string>
     <string name="setup_quit_hint">Beendet das laufende Spiel und die Sitzung sauber und schließt danach alle Teile der App. Wegwischen kann die Sitzung weiterlaufen lassen.</string>

@@ -94,7 +94,8 @@ object RootSoftThrottle {
             }
             try { Thread.sleep(POLL_MS) } catch (_: InterruptedException) { break }
         }
-        runCatching { RootGameProfiles.setThermalCap(context, 0) }
+        // No cap reset here: on session end it raced the restore and re-applied the profile (fan included);
+        // whoever stops the throttle mid-session clears the cap itself.
         Log.i(TAG, "stopped")
     }
 

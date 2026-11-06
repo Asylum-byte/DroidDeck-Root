@@ -635,6 +635,12 @@
     <string name="perf_vram_cap_hint">The video memory DXVK reports to Direct3D games, so they budget textures for less. A game\'s own DXVK settings still win. Takes effect at the next session.</string>
     <string name="perf_gpuclock">Hold the GPU at its top clock</string>
     <string name="perf_gpuclock_hint">Adreno only. Fewer hitches, more battery use and heat.</string>
+    <string name="setup_fan">Built-in fan</string>
+    <string name="setup_fan_hint">Needs root. Switches the RedMagic fan on (full speed) or off right now, e.g. if it keeps running after a session.</string>
+    <string name="setup_fan_button">On / off</string>
+    <string name="setup_fan_now_on">Fan on</string>
+    <string name="setup_fan_now_off">Fan off</string>
+    <string name="setup_fan_unavailable">No fan control (needs root and a fan)</string>
     <string name="setup_quit_group">App</string>
     <string name="setup_quit">Quit DroidDeck</string>
     <string name="setup_quit_hint">Ends the running game and session cleanly, then closes every part of the app. Swiping the app away can leave the session running.</string>

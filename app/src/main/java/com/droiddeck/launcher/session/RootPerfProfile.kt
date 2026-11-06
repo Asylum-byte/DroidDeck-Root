@@ -68,6 +68,10 @@ object RootPerfProfile {
         val saved = snapshot.output.lines().filter { line ->
             val path = line.substringBefore('=', "")
             NODE.matches(path) && line.substringAfter('=').isNotBlank()
+        }.map { line ->
+            // The fan always ends up off: "on" before the session is usually a leftover (a killed session,
+            // the vendor game mode), and restoring it kept the fan running after DroidDeck was closed.
+            if (line.substringBefore('=') == FAN_ENABLE) "$FAN_ENABLE=0" else line
         }
         File(context.filesDir, SNAPSHOT).writeText(saved.joinToString("\n"))
         ensureWatchdog(context)
@@ -142,6 +146,26 @@ object RootPerfProfile {
     private fun stopGuard() {
         guardProcess?.let { p -> runCatching { p.outputStream.close() }; p.destroy() }
         guardProcess = null
+    }
+
+    /** The built-in fan right now: true/false, or null when the device has no fan node or no root. */
+    fun fanOn(): Boolean? {
+        if (!RootShell.known()) return null
+        return when (RootShell.run(listOf("cat $FAN_ENABLE 2>/dev/null"), 5).lastLine.trim()) {
+            "1" -> true
+            "0" -> false
+            else -> null
+        }
+    }
+
+    /** Switches the built-in fan by hand (full speed when on); returns the state read back. */
+    @Synchronized
+    fun setFan(on: Boolean): Boolean? {
+        if (!RootShell.available()) return null
+        val commands = if (on) listOf("echo 1 > $FAN_ENABLE", "[ -e $FAN_LEVEL ] && echo $FAN_TOP_LEVEL > $FAN_LEVEL")
+        else listOf("echo 0 > $FAN_ENABLE")
+        RootShell.run(commands, 5)
+        return fanOn()
     }
 
     @Synchronized

@@ -396,6 +396,7 @@ internal fun SetupPanel(
                         SettingsGroup(stringResource(R.string.setup_runtime)) { runtimeCheck(false) }
                         SteamIntegrationGroup(s.integration, s.integrationFocus, a.onIntegration, a.onIntegrationAppInfo, a.onIntegrationLocation)
                         SettingsGroup(stringResource(R.string.setup_quit_group)) {
+                            ActionRow(stringResource(R.string.setup_fan), stringResource(R.string.setup_fan_hint), stringResource(R.string.setup_fan_button), a.onToggleFan)
                             ActionRow(stringResource(R.string.setup_quit), stringResource(R.string.setup_quit_hint), stringResource(R.string.setup_quit_button), a.onQuitApp)
                         }
                     }

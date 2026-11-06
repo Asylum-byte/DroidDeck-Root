@@ -55,6 +55,10 @@ internal object AgentRoot {
             status(context)
         }
         "frames" -> frames()
+        "fan" -> {
+            val on = if (request.has("on")) RootPerfProfile.setFan(request.getBoolean("on")) else RootPerfProfile.fanOn()
+            JSONObject().put("fanOn", on ?: JSONObject.NULL)
+        }
         "thermal" -> thermal(context, request)
         "env" -> env(context, request)
         "trial" -> {
@@ -183,6 +187,7 @@ internal object AgentRoot {
                 .put("chroot", SessionPrefs.rootChroot(context))
                 .put("softThrottle", SessionPrefs.rootSoftThrottle(context)))
             .put("thermalCapMhz", RootGameProfiles.thermalCapMhz)
+            .put("fanOn", RootPerfProfile.fanOn() ?: JSONObject.NULL)
             .put("gameFpsLimit", com.droiddeck.launcher.session.SessionState.gameFpsLimit)
             .put("refreshHz", com.droiddeck.launcher.session.SessionState.refreshHz.toDouble())
             .put("runningGame", running ?: JSONObject.NULL)

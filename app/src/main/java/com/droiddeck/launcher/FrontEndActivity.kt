@@ -1019,6 +1019,20 @@ class FrontEndActivity : ComponentActivity() {
     }
 
     /** Ends the Linux session the normal way, then removes every task and process of this app. */
+    private fun toggleFan() {
+        Thread({
+            val now = com.droiddeck.launcher.session.RootPerfProfile.fanOn()
+            val after = if (now == null) null else com.droiddeck.launcher.session.RootPerfProfile.setFan(!now)
+            runOnUiThread {
+                android.widget.Toast.makeText(this, getString(when (after) {
+                    true -> R.string.setup_fan_now_on
+                    false -> R.string.setup_fan_now_off
+                    null -> R.string.setup_fan_unavailable
+                }), android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }, "fan-toggle").start()
+    }
+
     private fun quitApp() {
         android.widget.Toast.makeText(this, R.string.setup_quit_progress, android.widget.Toast.LENGTH_SHORT).show()
         val app = applicationContext
@@ -1387,6 +1401,7 @@ class FrontEndActivity : ComponentActivity() {
                             if (limit == com.droiddeck.launcher.core.BackgroundAppLimit.OFF) com.droiddeck.launcher.core.BackgroundAppLimit.restoreAsync(this)
                         },
                         onQuitApp = { quitApp() },
+                        onToggleFan = { toggleFan() },
                         onShareLogs = {
                             SessionLogShare.prepare(this, { SessionLogShare.latest(this) }) { zip ->
                                 if (zip == null) android.widget.Toast.makeText(this, R.string.main_no_logs_yet, android.widget.Toast.LENGTH_LONG).show()

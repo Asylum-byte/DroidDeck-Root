@@ -224,6 +224,7 @@ class FrontEndActions(
     val onSaveExport: (Library.SteamGame, com.droiddeck.launcher.session.GameSaves.Layout) -> Unit = { _, _ -> },
     val onPerformance: () -> Unit,
     val onQuitApp: () -> Unit = {},
+    val onToggleFan: () -> Unit = {},
     val onRoms: () -> Unit,
     val onFiles: () -> Unit,
     val onBrowseFiles: (File) -> Unit = {},
