@@ -40,6 +40,8 @@ import com.droiddeck.launcher.ui.PackageRow
 import com.droiddeck.launcher.ui.exposeTestTags
 import com.droiddeck.launcher.session.OfflineMode
 import com.droiddeck.launcher.session.ProtonExtras
+import com.droiddeck.launcher.session.ComponentUpdater
+import com.droiddeck.launcher.session.ComponentUpdates
 import com.droiddeck.launcher.session.ComponentsManager
 import com.droiddeck.launcher.ui.ComponentsPage
 import com.droiddeck.launcher.session.GameSaves
@@ -61,9 +63,7 @@ import com.droiddeck.launcher.ui.ModeSettings
 import com.droiddeck.launcher.ui.ModeSettingsActions
 import com.droiddeck.launcher.ui.ConfirmDialog
 import com.droiddeck.launcher.ui.ControllerActions
-import com.droiddeck.launcher.ui.ControllerMappingPage
 import com.droiddeck.launcher.input.ControllerPrefs
-import com.droiddeck.launcher.input.ControllerEditorActivity
 import com.droiddeck.launcher.ui.FrontEndScreen
 import com.droiddeck.launcher.ui.FrontEndState
 import com.droiddeck.launcher.ui.FrontEndActions
@@ -94,7 +94,11 @@ class FrontEndActivity : ComponentActivity() {
     private val components = ComponentsMenu(this, ui)
     private val decky = DeckyMenu(this, ui)
     private val updates = UpdatesMenu(this, ui)
-    private val protons = ProtonMenu(this, ui) { !busy && flood == null && compatLaunch == null && pkgStage == null && components.compBusy == null }
+    private val protons = ProtonMenu(
+        this, ui,
+        idle = { !busy && flood == null && compatLaunch == null && pkgStage == null && components.compBusy == null },
+        onInstalled = { if (!OfflineMode.enabled(this)) components.checkComponentUpdates(force = false) },
+    )
 
     private var installed by mutableStateOf<String?>(null)
     private var flood by mutableStateOf<PendingFlood?>(null)
@@ -211,6 +215,7 @@ class FrontEndActivity : ComponentActivity() {
     private var gameStoresSpeedTier by mutableStateOf("fast")
     private var navRequest by mutableStateOf<String?>(null)
     private val gameLaunchRequest = java.util.concurrent.atomic.AtomicLong()
+    private var preparingGames by mutableStateOf(emptySet<String>())
     private var storesShowMature by mutableStateOf(false)
     private var storesSort by mutableStateOf(SessionPrefs.STORES_SORTS.first())
     private var storesView by mutableStateOf(SessionPrefs.DEFAULT_STORES_VIEW)
@@ -1188,6 +1193,7 @@ class FrontEndActivity : ComponentActivity() {
                         installed = installed, ready = ready, available = available?.version, removalPending = removalPending, runtimeActionsBlocked = runtimeChangesBlocked(),
                         vkBridge = vkBridge, venus = venus, venusHostVulkan = venusHostVulkan, vkBridgeSafe = vkBridgeSafe, bridgeProtonDxvk = bridgeProtonDxvk, adreno = adrenoGpu,
                         shortcutPicker = shortcutPicker,
+                        preparingGames = preparingGames,
                         shortcutLibraryScanning = shortcutLibraryScanning,
                         gameSyncFolder = gameSyncFolder,
                         busy = busy, stage = stage, percent = percent,
@@ -1266,14 +1272,26 @@ class FrontEndActivity : ComponentActivity() {
                         },
                         onSteamGame = { g ->
                             if (shortcutPicker) chooseGameShortcut(g)
-                            else {
-                                val request = gameLaunchRequest.incrementAndGet()
-                                com.droiddeck.launcher.frontend.AutoComponents.beforeLaunch(this, g) {
-                                    if (request != gameLaunchRequest.get() || isFinishing || isDestroyed) return@beforeLaunch
-                                    com.droiddeck.launcher.stores.StoreLaunch.prepare(this, g) {
-                                        if (request == gameLaunchRequest.get() && !isFinishing && !isDestroyed) launchGame(g)
+                            else if (g.launchKey !in preparingGames) {
+                                preparingGames = preparingGames + g.launchKey
+                                prepareAndLaunch(g, g.launchKey)
+                            }
+                        },
+                        onStoreGame = { store, id ->
+                            val key = "${store.id}:$id"
+                            if (key !in preparingGames) {
+                                preparingGames = preparingGames + key
+                                val app = applicationContext
+                                Thread({
+                                    val g = runCatching { com.droiddeck.launcher.stores.StoreLaunch.installedGame(app, store, id) }.getOrNull()
+                                    runOnUiThread {
+                                        if (g != null && !isFinishing && !isDestroyed) prepareAndLaunch(g, key)
+                                        else {
+                                            preparingGames = preparingGames - key
+                                            if (g == null && !isFinishing && !isDestroyed) android.widget.Toast.makeText(this, R.string.stores_launch_not_registered, android.widget.Toast.LENGTH_LONG).show()
+                                        }
                                     }
-                                }
+                                }, "store-play").start()
                             }
                         },
                         onEpicLauncher = { openEpicLauncher() },
@@ -1635,23 +1653,7 @@ class FrontEndActivity : ComponentActivity() {
                         },
                         updates = updates.actions(),
                         controller = ControllerActions(
-                            onOsc = { o -> SessionPrefs.setOscMode(this, o); oscMode = o },
-                            onTint = { t -> ControllerPrefs.setTint(this, t); refreshController() },
-                            onOpacity = { o -> ControllerPrefs.setOpacity(this, o); refreshController() },
-                            onSize = { v -> ControllerPrefs.setSize(this, v); refreshController() },
-                            onStickClick = { on -> ControllerPrefs.setStickClick(this, on); refreshController() },
-                            onAdaptiveSticks = { on -> ControllerPrefs.setAdaptiveSticks(this, on); refreshController() },
-                            onRumble = { on -> ControllerPrefs.setRumble(this, on); refreshController() },
-                            onDeadZone = { v -> ControllerPrefs.setDeadZone(this, v); refreshController() },
-                            onSteamButton = { on -> ControllerPrefs.setSteamButton(this, on); refreshController() },
-                            onQamButton = { on -> ControllerPrefs.setQamButton(this, on); refreshController() },
-                            onKeyboardButton = { on -> ControllerPrefs.setKeyboardButton(this, on); refreshController() },
-                            onSelectSteam = { on -> ControllerPrefs.setSelectSteam(this, on); refreshController() },
-                            onJoyConVr = { on -> ControllerPrefs.setJoyConVr(this, on); refreshController() },
-                            onEditLayout = { startActivity(Intent(this, ControllerEditorActivity::class.java)) },
-                            onResetLayout = { ControllerPrefs.resetAllLayouts(this); refreshController() },
                             onMapping = { showPerformance = false; showComponents = false; showMapping = true },
-                            onResetAll = { ControllerPrefs.resetAll(this); refreshController() },
                         ),
                     ),
                     page = page,
@@ -1938,6 +1940,13 @@ class FrontEndActivity : ComponentActivity() {
                 if (applied.isNotEmpty()) ui.post {
                     android.widget.Toast.makeText(this, getString(R.string.main_applied, applied.joinToString(", ")), android.widget.Toast.LENGTH_LONG).show()
                 }
+                if (!OfflineMode.enabled(this)) {
+                    val updated = runCatching { ComponentUpdater.ensure(this, force = false) }
+                        .onFailure { android.util.Log.w("ComponentUpdater", "automatic component updates", it) }.getOrDefault(emptyList())
+                    if (updated.isNotEmpty()) ui.post {
+                        android.widget.Toast.makeText(this, updated.joinToString("\n"), android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
                 ui.post {
                     componentsQueueBusy = false
                     if (showComponents) components.refreshComponents()
@@ -1999,6 +2008,18 @@ class FrontEndActivity : ComponentActivity() {
     private fun savedIntent(state: Bundle, key: String): Intent? =
         if (Build.VERSION.SDK_INT >= 33) state.getParcelable(key, Intent::class.java)
         else @Suppress("DEPRECATION") state.getParcelable(key)
+
+    private fun prepareAndLaunch(g: Library.SteamGame, key: String) {
+        val request = gameLaunchRequest.incrementAndGet()
+        val done = { preparingGames = preparingGames - key }
+        com.droiddeck.launcher.frontend.AutoComponents.beforeLaunch(this, g, onBlocked = done) {
+            if (request != gameLaunchRequest.get() || isFinishing || isDestroyed) { done(); return@beforeLaunch }
+            com.droiddeck.launcher.stores.StoreLaunch.prepare(this, g) {
+                done()
+                if (request == gameLaunchRequest.get() && !isFinishing && !isDestroyed) launchGame(g)
+            }
+        }
+    }
 
     override fun onDestroy() {
         gameLaunchRequest.incrementAndGet()
@@ -2155,13 +2176,7 @@ class FrontEndActivity : ComponentActivity() {
 
     @Composable
     private fun MappingHost() {
-        val settings = controllerSettings ?: return
-        ControllerMappingPage(
-            mapping = settings.mapping,
-            onPick = { id, target -> ControllerPrefs.setTarget(this, id, target); refreshController() },
-            onReset = { ControllerPrefs.resetMapping(this); refreshController() },
-            onBack = { showMapping = false },
-        )
+        com.droiddeck.launcher.ui.InputSettingsPage(onBack = { showMapping = false })
     }
 
     private fun openComponents(focusContent: Boolean = true, tab: String? = null, gameKey: String? = null) {
@@ -2185,9 +2200,11 @@ class FrontEndActivity : ComponentActivity() {
     private fun importComponent(uri: Uri) {
         val name = displayNameOf(uri) ?: "imported.wcp"
         components.componentAction(getString(R.string.comp_busy_importing)) {
-            val tmp = File(cacheDir, "component-import.wcp")
-            contentResolver.openInputStream(uri)?.use { input -> tmp.outputStream().use { input.copyTo(it) } } ?: error(getString(R.string.comp_cannot_read))
-            try { getString(R.string.comp_imported, ComponentsManager.importPackage(this, tmp, name).version) } finally { tmp.delete() }
+            val tmp = File.createTempFile("component-import", ".wcp", cacheDir)
+            try {
+                contentResolver.openInputStream(uri)?.use { input -> tmp.outputStream().use { input.copyTo(it) } } ?: error(getString(R.string.comp_cannot_read))
+                getString(R.string.comp_imported, ComponentUpdater.importPackage(this, tmp, name).version)
+            } finally { tmp.delete() }
         }
     }
 
@@ -2211,7 +2228,15 @@ class FrontEndActivity : ComponentActivity() {
             onDeletePackage = { file -> components.componentAction(getString(R.string.comp_busy_deleting)) { ComponentsManager.deletePackage(this, file) } },
             onDeleteOriginal = { version -> components.compProton?.let { pid -> components.componentAction(getString(R.string.comp_busy_deleting)) { ComponentsManager.deleteOriginal(this, pid, components.compComp, version) } } },
             onDownload = { components.downloadComponent(it) },
-            onRefresh = { components.refreshComponentCatalog() },
+            onRefresh = {
+                components.refreshComponentCatalog()
+                if (components.compModes.values.any { it == ComponentUpdates.AUTO }) components.checkComponentUpdates(force = true)
+            },
+            compModes = components.compModes,
+            compAuto = components.compAuto,
+            compAutoHeld = components.compAutoHeld,
+            compAutoChecking = components.compAutoChecking,
+            onCompMode = { comp, mode -> components.chooseComponentMode(comp, mode) },
             onImport = { pickComponent.launch(InAppFilePicker.buildIntent(this, WCP_EXT, getString(R.string.comp_pick_wcp))) },
             onBack = { if (!com.droiddeck.launcher.ui.Hops.back { showComponents = false }) showComponents = false },
             games = steamGames,
@@ -2447,6 +2472,7 @@ class FrontEndActivity : ComponentActivity() {
                     SessionPrefs.setUnfoldedControlsWithController(this, on); unfoldedControlsWithController = on
                 },
                 onOsc = { o -> SessionPrefs.setOscMode(this, o); oscMode = o },
+                onInputSettings = { showPerformance = false; showComponents = false; showMapping = true },
                 onBackHold = { on -> SessionPrefs.setBackHold(this, on); backHold = on },
                 onBackActionsInverted = { inverted ->
                     SessionPrefs.setBackActionsInverted(this, inverted)
@@ -3073,6 +3099,7 @@ class FrontEndActivity : ComponentActivity() {
     private fun removeRuntime() {
         if (runtimeChangesBlocked()) return
         val removal = LinuxRuntimeInstaller.beginUninstall(this) ?: return
+        com.droiddeck.launcher.runtime.RuntimeAutoUpdate.seed(this)
         ready = false
         com.droiddeck.launcher.runtime.RuntimeInstallService.keepRemovalAlive(this)
         followRuntimeOperation { removal.run(it) }
@@ -3099,6 +3126,7 @@ class FrontEndActivity : ComponentActivity() {
                     android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show()
                 }
                 refresh()
+                if (ok == true && LinuxRuntime.isInstalled(this)) protons.checkUpdates()
             }
         }, "runtime-operation").start()
     }
@@ -3106,9 +3134,12 @@ class FrontEndActivity : ComponentActivity() {
     private fun autoUpdateRuntime() {
         val release = available?.takeIf { catalogFresh } ?: return
         if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) || runtimeChangesBlocked() || removalPending) return
-        if (release.version == installed || installed == null) return
+        if (installed != null) com.droiddeck.launcher.runtime.RuntimeAutoUpdate.seed(this)
+        if (release.version == installed) return
+        if (installed == null && (OfflineMode.enabled(this) || !com.droiddeck.launcher.core.DeviceSupport.canDraw(this) ||
+                !com.droiddeck.launcher.frontend.AutoComponents.online(this) || com.droiddeck.launcher.frontend.AutoComponents.unfavourable(this))) return
         if (com.droiddeck.launcher.runtime.RuntimeAutoUpdate.claim(this, installed, release.version)) {
-            Log.i(TAG, "runtime: updating $installed to ${release.version} by itself")
+            Log.i(TAG, "runtime: installing ${release.version} over ${installed ?: "nothing"} by itself")
             install(release)
         }
     }
