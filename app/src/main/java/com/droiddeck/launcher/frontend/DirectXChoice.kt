@@ -47,6 +47,41 @@ object DirectXChoice {
         return saved
     }
 
+    /** An added game's launch options live in DroidDeck's own settings, keyed by its folder. */
+    fun ofAdded(context: Context, folder: String): Api =
+        of(com.droiddeck.launcher.session.SessionPrefs.addedGameLaunch(context, folder))
+
+    fun setAdded(context: Context, folder: String, scope: String, api: Api): Boolean {
+        val before = com.droiddeck.launcher.session.SessionPrefs.addedGameLaunch(context, folder)
+        val after = withApi(before, api)
+        if (after.trim() != before.trim()) AddedGameEdits.setLaunchOptions(context, folder, after) ?: return false
+        setNoD3d12(context, scope, api == Api.DX11)
+        return true
+    }
+
+    /** Agent entry: a Steam game by app id, or an added game by its profile key. Null when unknown. */
+    fun forScope(context: Context, scope: String): Pair<Api, String>? {
+        added(context, scope)?.let { folder ->
+            val options = com.droiddeck.launcher.session.SessionPrefs.addedGameLaunch(context, folder)
+            return of(options) to options
+        }
+        val appId = scope.toIntOrNull()?.takeIf { it > 0 } ?: return null
+        val options = SteamLaunchOptions.current(context, appId) ?: return null
+        return of(options) to options
+    }
+
+    fun setScope(context: Context, scope: String, api: Api): SteamLaunchOptions.Saved {
+        added(context, scope)?.let { folder ->
+            return if (setAdded(context, folder, scope, api)) SteamLaunchOptions.Saved.YES else SteamLaunchOptions.Saved.NO
+        }
+        val appId = scope.toIntOrNull()?.takeIf { it > 0 } ?: return SteamLaunchOptions.Saved.NO
+        return set(context, appId, api)
+    }
+
+    private fun added(context: Context, scope: String): String? = runCatching {
+        LibraryCache.snapshot(context).first.firstOrNull { it.library == Library.ADDED && it.profileKey == scope }?.gameFiles?.path
+    }.getOrNull()
+
     @Synchronized
     private fun setNoD3d12(context: Context, scope: String, on: Boolean) {
         val config = GameEnvironmentStore.read(context)

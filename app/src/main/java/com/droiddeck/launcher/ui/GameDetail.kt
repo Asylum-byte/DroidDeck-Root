@@ -824,7 +824,8 @@ internal fun canEditSteamLaunchOptions(game: Library.SteamGame, shortcutPicker: 
 @Composable
 private fun ShortcutFields(game: Library.SteamGame, folder: File) {
     val ctx = LocalContext.current
-    val preview = remember(game.gameId, game.name, GamesDialogState.editing) { EditPreview.of(ctx, game, folder.path) }
+    var refresh by remember(game.gameId) { mutableStateOf(0) }
+    val preview = remember(game.gameId, game.name, GamesDialogState.editing, refresh) { EditPreview.of(ctx, game, folder.path) }
     fun edit(target: Boolean) { GamesDialogState.editing = EditRequest(folder.path, openTarget = target, fromSummary = false, preview = EditPreview.of(ctx, game, folder.path)) }
     Column(Modifier.fillMaxWidth().tabPanel(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         SectionLabel(stringResource(R.string.game_launch_shortcut))
@@ -832,6 +833,23 @@ private fun ShortcutFields(game: Library.SteamGame, folder: File) {
         MenuItem(stringResource(R.string.edit_target), checked = false, detail = preview.exeName ?: "—") { edit(true) }
         MenuItem(stringResource(R.string.edit_start_in), checked = false, detail = preview.startIn ?: "—") { edit(false) }
         MenuItem(stringResource(R.string.edit_launch_options), checked = false, detail = preview.launchOptions.ifEmpty { "—" }) { edit(false) }
+        val api = com.droiddeck.launcher.frontend.DirectXChoice.of(preview.launchOptions)
+        MenuItem(
+            stringResource(R.string.game_directx), checked = false,
+            detail = when (api) {
+                com.droiddeck.launcher.frontend.DirectXChoice.Api.AUTO -> stringResource(R.string.game_directx_auto)
+                com.droiddeck.launcher.frontend.DirectXChoice.Api.DX11 -> "DirectX 11"
+                com.droiddeck.launcher.frontend.DirectXChoice.Api.DX12 -> "DirectX 12"
+            },
+        ) {
+            val next = com.droiddeck.launcher.frontend.DirectXChoice.Api.entries.let { it[(api.ordinal + 1) % it.size] }
+            val app = ctx.applicationContext
+            Thread({
+                com.droiddeck.launcher.frontend.DirectXChoice.setAdded(app, folder.path, game.profileKey, next)
+                // Reload the preview so the row and the launch options show the new value.
+                android.os.Handler(android.os.Looper.getMainLooper()).post { refresh++ }
+            }, "directx").start()
+        }
     }
 }
 

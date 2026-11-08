@@ -121,8 +121,7 @@ internal object AgentRoot {
     /** DirectX choice of a Steam game: read, or set with {"api": "auto"|"dx11"|"dx12"}. */
     private fun directX(context: Context, request: JSONObject): JSONObject {
         val scope = request.optString("scope")
-        val appId = scope.toIntOrNull()?.takeIf { it > 0 && scope.matches(Regex("[1-9][0-9]{0,9}")) }
-            ?: throw AgentException("INVALID_REQUEST", "scope must be a Steam app id")
+        if (!scope.matches(Regex("[1-9][0-9]{0,9}"))) throw AgentException("INVALID_REQUEST", "scope must be a game id")
         val dx = com.droiddeck.launcher.frontend.DirectXChoice
         val result = JSONObject()
         if (request.has("api")) {
@@ -132,11 +131,11 @@ internal object AgentRoot {
                 "dx12", "12" -> com.droiddeck.launcher.frontend.DirectXChoice.Api.DX12
                 else -> throw AgentException("INVALID_REQUEST", "api must be auto, dx11 or dx12")
             }
-            result.put("saved", dx.set(context, appId, api).name.lowercase())
+            result.put("saved", dx.setScope(context, scope, api).name.lowercase())
         }
-        val options = com.droiddeck.launcher.frontend.SteamLaunchOptions.current(context, appId)
-        return result.put("api", options?.let { dx.of(it).name.lowercase() } ?: JSONObject.NULL)
-            .put("launchOptions", options ?: JSONObject.NULL)
+        val now = dx.forScope(context, scope)
+        return result.put("api", now?.first?.name?.lowercase() ?: JSONObject.NULL)
+            .put("launchOptions", now?.second ?: JSONObject.NULL)
     }
 
     private const val BACKUPS = 15
