@@ -127,9 +127,9 @@ internal object AgentRoot {
         val result = JSONObject()
         if (request.has("api")) {
             val api = when (request.getString("api").lowercase()) {
-                "auto" -> dx.Api.AUTO
-                "dx11", "11" -> dx.Api.DX11
-                "dx12", "12" -> dx.Api.DX12
+                "auto" -> com.droiddeck.launcher.frontend.DirectXChoice.Api.AUTO
+                "dx11", "11" -> com.droiddeck.launcher.frontend.DirectXChoice.Api.DX11
+                "dx12", "12" -> com.droiddeck.launcher.frontend.DirectXChoice.Api.DX12
                 else -> throw AgentException("INVALID_REQUEST", "api must be auto, dx11 or dx12")
             }
             result.put("saved", dx.set(context, appId, api).name.lowercase())
