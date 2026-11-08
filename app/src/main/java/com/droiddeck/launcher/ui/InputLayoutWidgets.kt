@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -22,15 +21,17 @@ import com.droiddeck.launcher.input.*
 
 @Composable
 internal fun InputLayoutRow(layout: SavedInputLayout, role: InputRole, detail: String?, onManage: () -> Unit, onPick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onPick).padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        InputLayoutThumbnail(layout, role)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(layout.name, style = MaterialTheme.typography.titleMedium)
-            Text(detail ?: stringResource(R.string.input_layout_count, layout.elements.size),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).focusRow(onClick = onPick).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            InputLayoutThumbnail(layout, role)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(layout.name, style = MaterialTheme.typography.titleMedium)
+                Text(detail ?: stringResource(R.string.input_layout_count, layout.elements.size),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        TextButton(onClick = onManage, modifier = Modifier.testTag("layout-manage-${layout.id}")) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
+        PadTextButton(onClick = onManage, modifier = Modifier.testTag("layout-manage-${layout.id}")) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
     }
 }
 
@@ -65,18 +66,19 @@ internal class InputLayoutPreviewView(context: Context) : View(context) {
 }
 
 @Composable
-internal fun InputColorRow(host: MenuHost, value: Int, onPick: (Int) -> Unit) {
+internal fun InputColorRow(host: MenuHost, value: Int?, onPick: (Int?) -> Unit) {
     val open = host.open == "layout-color"
+    val tints = listOf<Pair<Int?, Int>>(null to R.string.ctrl_tint_gray) + ControllerPrefs.tints
     SettingsRow(stringResource(R.string.ctrl_color), null, highlighted = open) {
         Box {
-            ValueChip(ControllerPrefs.tints.firstOrNull { it.first == value }?.second?.let { stringResource(it) }
+            ValueChip(tints.firstOrNull { it.first == value }?.second?.let { stringResource(it) }
                 ?: stringResource(R.string.ctrl_custom), open, modifier = Modifier.testTag("setting-layout-color")) {
                 host.open = if (open) null else "layout-color"
             }
             AnchoredMenu(open, onDismiss = { if (host.open == "layout-color") host.open = null }, title = stringResource(R.string.ctrl_color)) { firstItemFocus ->
-                ControllerPrefs.tints.forEachIndexed { index, (color, name) ->
+                tints.forEachIndexed { index, (color, name) ->
                     MenuItem(stringResource(name), checked = value == color, leading = {
-                        Box(Modifier.size(14.dp).background(Color(color), CircleShape).border(1.dp, Color.White.copy(alpha = .35f), CircleShape))
+                        Box(Modifier.size(14.dp).background(Color(color ?: GRAY_SWATCH), CircleShape).border(1.dp, Color.White.copy(alpha = .35f), CircleShape))
                     }, focusRequester = if (index == 0) firstItemFocus else null) {
                         onPick(color)
                         host.open = null
@@ -86,3 +88,5 @@ internal fun InputColorRow(host: MenuHost, value: Int, onPick: (Int) -> Unit) {
         }
     }
 }
+
+private const val GRAY_SWATCH = 0xFF26292E.toInt()
