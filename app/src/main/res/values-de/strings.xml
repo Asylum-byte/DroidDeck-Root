@@ -587,6 +587,8 @@
     <string name="perf_vram_cap_hint">Meldet Direct3D-9-bis-12-Spielen dieses Videospeicherbudget, um den Speicherverbrauch zu senken. Spiele können es überschreiten; dies fügt kein GPU-Paging hinzu und garantiert keinen Schutz vor Abstürzen durch Speichermangel. Gilt ab der nächsten Sitzung.</string>
     <string name="perf_gpuclock">GPU auf höchstem Takt halten</string>
     <string name="perf_gpuclock_hint">Nur Adreno. Weniger Ruckler, mehr Akkuverbrauch und Wärme.</string>
+    <string name="game_directx">DirectX-Version</string>
+    <string name="game_directx_auto">Automatisch (Spiel entscheidet)</string>
     <string name="setup_fan">Eingebauter Lüfter</string>
     <string name="setup_fan_hint">Braucht Root. Schaltet den RedMagic-Lüfter sofort an (volle Stufe) oder aus, z. B. wenn er nach einer Sitzung weiterläuft.</string>
     <string name="setup_fan_button">An / Aus</string>

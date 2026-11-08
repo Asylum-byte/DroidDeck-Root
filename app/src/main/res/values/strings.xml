@@ -635,6 +635,8 @@
     <string name="perf_vram_cap_hint">Reports this video memory budget to Direct3D 9 to 12 games to encourage lower memory use. Games may exceed it; this does not add GPU paging or guarantee protection from out-of-memory crashes. Takes effect at the next session.</string>
     <string name="perf_gpuclock">Hold the GPU at its top clock</string>
     <string name="perf_gpuclock_hint">Adreno only. Fewer hitches, more battery use and heat.</string>
+    <string name="game_directx">DirectX version</string>
+    <string name="game_directx_auto">Automatic (game decides)</string>
     <string name="setup_fan">Built-in fan</string>
     <string name="setup_fan_hint">Needs root. Switches the RedMagic fan on (full speed) or off right now, e.g. if it keeps running after a session.</string>
     <string name="setup_fan_button">On / off</string>

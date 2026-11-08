@@ -285,6 +285,35 @@ internal fun SteamLaunchOptionsPanel(appId: Int) {
             stringResource(R.string.edit_launch_options), checked = false, enabled = value != null && !saving && !loading,
             detail = if (value == null || saving || loading) "…" else value.ifEmpty { "—" },
         ) { if (!saving && !loading) options?.let { editing = it } }
+        val api = value?.let { com.droiddeck.launcher.frontend.DirectXChoice.of(it) }
+        MenuItem(
+            stringResource(R.string.game_directx), checked = false, enabled = value != null && !saving && !loading,
+            detail = when (api) {
+                null -> "…"
+                com.droiddeck.launcher.frontend.DirectXChoice.Api.AUTO -> stringResource(R.string.game_directx_auto)
+                com.droiddeck.launcher.frontend.DirectXChoice.Api.DX11 -> "DirectX 11"
+                com.droiddeck.launcher.frontend.DirectXChoice.Api.DX12 -> "DirectX 12"
+            },
+        ) {
+            val current = api ?: return@MenuItem
+            if (saving || loading) return@MenuItem
+            val next = com.droiddeck.launcher.frontend.DirectXChoice.Api.entries.let { it[(current.ordinal + 1) % it.size] }
+            saving = true
+            scope.launch {
+                try {
+                    val saved = withContext(Dispatchers.IO) { com.droiddeck.launcher.frontend.DirectXChoice.set(app, appId, next) }
+                    error = when (saved) {
+                        SteamLaunchOptions.Saved.YES -> null
+                        SteamLaunchOptions.Saved.DESKTOP -> R.string.edit_launch_options_desktop
+                        SteamLaunchOptions.Saved.NO -> R.string.edit_launch_options_not_saved
+                    }
+                    options = null
+                    version++
+                } finally {
+                    saving = false
+                }
+            }
+        }
         val message = error
         Text(
             stringResource(message ?: R.string.edit_launch_options_steam_hint),

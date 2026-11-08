@@ -55,6 +55,7 @@ internal object AgentRoot {
             status(context)
         }
         "frames" -> frames()
+        "dx" -> directX(context, request)
         "fan" -> {
             val on = if (request.has("on")) RootPerfProfile.setFan(request.getBoolean("on")) else RootPerfProfile.fanOn()
             JSONObject().put("fanOn", on ?: JSONObject.NULL)
@@ -115,6 +116,27 @@ internal object AgentRoot {
         return JSONObject().put("sessions", sessions)
             .put("session", file?.nameWithoutExtension ?: JSONObject.NULL)
             .put("csv", file?.let { f -> f.readText().takeLast(400_000) } ?: "")
+    }
+
+    /** DirectX choice of a Steam game: read, or set with {"api": "auto"|"dx11"|"dx12"}. */
+    private fun directX(context: Context, request: JSONObject): JSONObject {
+        val scope = request.optString("scope")
+        val appId = scope.toIntOrNull()?.takeIf { it > 0 && scope.matches(Regex("[1-9][0-9]{0,9}")) }
+            ?: throw AgentException("INVALID_REQUEST", "scope must be a Steam app id")
+        val dx = com.droiddeck.launcher.frontend.DirectXChoice
+        val result = JSONObject()
+        if (request.has("api")) {
+            val api = when (request.getString("api").lowercase()) {
+                "auto" -> dx.Api.AUTO
+                "dx11", "11" -> dx.Api.DX11
+                "dx12", "12" -> dx.Api.DX12
+                else -> throw AgentException("INVALID_REQUEST", "api must be auto, dx11 or dx12")
+            }
+            result.put("saved", dx.set(context, appId, api).name.lowercase())
+        }
+        val options = com.droiddeck.launcher.frontend.SteamLaunchOptions.current(context, appId)
+        return result.put("api", options?.let { dx.of(it).name.lowercase() } ?: JSONObject.NULL)
+            .put("launchOptions", options ?: JSONObject.NULL)
     }
 
     private const val BACKUPS = 15
