@@ -248,6 +248,8 @@ internal object AgentRoot {
     }
 
     private fun sensors(context: Context): JSONObject {
+        // Outside a session nothing has asked for root in this process yet; the readings need it.
+        if (!com.droiddeck.launcher.core.RootShell.available()) return JSONObject().put("available", false)
         val r = com.droiddeck.launcher.session.RootSensors.read(context) ?: return JSONObject().put("available", false)
         return JSONObject().put("available", true)
             .put("skinC", r.skin ?: JSONObject.NULL).put("gpuC", r.gpuC ?: JSONObject.NULL).put("batteryC", r.batteryC ?: JSONObject.NULL)

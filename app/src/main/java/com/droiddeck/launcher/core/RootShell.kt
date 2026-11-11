@@ -55,14 +55,15 @@ object RootShell {
             val answer = shellReader.submit(java.util.concurrent.Callable {
                 val text = StringBuilder()
                 val buffer = ByteArray(4096)
-                while (true) {
+                var found: String? = null
+                while (found == null) {
                     val n = input.read(buffer)
-                    if (n < 0) return@Callable null
+                    if (n < 0) break
                     text.append(String(buffer, 0, n))
                     val end = text.indexOf(marker)
-                    if (end >= 0) return@Callable text.substring(0, end)
+                    if (end >= 0) found = text.substring(0, end)
                 }
-                @Suppress("UNREACHABLE_CODE") null
+                found
             })
             answer.get(timeoutMs, TimeUnit.MILLISECONDS) ?: run { closeShell(); null }
         } catch (e: Exception) {
