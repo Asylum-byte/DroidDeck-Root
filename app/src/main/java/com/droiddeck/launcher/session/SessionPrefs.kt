@@ -790,6 +790,20 @@ object SessionPrefs {
         prefs(context).edit().putBoolean("matchRefreshToGame", on).apply()
     }
 
+    /** Power target for the governor in tenths of a watt (0 = none), e.g. 55 = 5.5 W. */
+    fun rootWattTargetTenths(context: Context): Int = prefs(context).getInt("rootWattTargetTenths", 0)
+
+    fun setRootWattTargetTenths(context: Context, tenths: Int) {
+        prefs(context).edit().putInt("rootWattTargetTenths", tenths).apply()
+    }
+
+    /** Keep background apps on two cores while a session runs. */
+    fun rootQuietBackground(context: Context): Boolean = prefs(context).getBoolean("rootQuietBackground", false)
+
+    fun setRootQuietBackground(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("rootQuietBackground", on).apply()
+    }
+
     fun rootSoftThrottle(context: Context): Boolean = prefs(context).getBoolean("rootSoftThrottle", false)
 
     fun setRootSoftThrottle(context: Context, on: Boolean) {

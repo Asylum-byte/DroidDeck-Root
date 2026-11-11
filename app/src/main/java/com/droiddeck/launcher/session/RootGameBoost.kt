@@ -84,8 +84,8 @@ object RootGameBoost {
         val pkg = context.packageName
         while (!Thread.currentThread().isInterrupted) {
             // Under chroot the guest runs in su's SELinux domain, so only root can see its /proc entries.
-            val listing = RootShell.run(listOf("ps -A -o PID,UID,NAME"))
-            val fresh = listing.output.lines().mapNotNull { line ->
+            val listing = RootShell.query("ps -A -o PID,UID,NAME", 8000).orEmpty()
+            val fresh = listing.lines().mapNotNull { line ->
                 val cols = line.trim().split(Regex("\\s+"))
                 val pid = cols.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
                 val owner = cols.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
@@ -93,7 +93,7 @@ object RootGameBoost {
                 pid.takeIf { owner == uid && it != me && name != pkg && !name.startsWith("$pkg:") }
             }.filter { pid -> synchronized(moved) { pid !in moved } }
             if (fresh.isNotEmpty()) {
-                RootShell.run(listOf("for p in ${fresh.joinToString(" ")}; do echo \$p > $GROUP/cgroup.procs; done 2>/dev/null; true"))
+                RootShell.query("for p in ${fresh.joinToString(" ")}; do echo \$p > $GROUP/cgroup.procs; done 2>/dev/null; true", 8000)
                 synchronized(moved) {
                     moved.addAll(fresh)
                     if (moved.size > 4096) moved.clear()

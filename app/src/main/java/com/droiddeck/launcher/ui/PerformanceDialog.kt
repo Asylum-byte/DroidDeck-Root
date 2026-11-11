@@ -55,6 +55,8 @@ fun PerformancePage(
     rootGpuCapMhz: Int,
     rootCpuCapPercent: Int,
     rootPrimeCapPercent: Int,
+    rootWattTargetTenths: Int,
+    rootQuietBackground: Boolean,
     matchRefresh: Boolean,
     ramCapMb: Int,
     zramClient: Boolean,
@@ -86,6 +88,8 @@ fun PerformancePage(
     onRootGpuCapMhz: (Int) -> Unit,
     onRootCpuCapPercent: (Int) -> Unit,
     onRootPrimeCapPercent: (Int) -> Unit,
+    onRootWattTargetTenths: (Int) -> Unit,
+    onRootQuietBackground: (Boolean) -> Unit,
     onMatchRefresh: (Boolean) -> Unit,
     onRamCapMb: (Int) -> Unit,
     onZramClient: (Boolean) -> Unit,
@@ -187,6 +191,19 @@ fun PerformancePage(
                     pct to if (pct == 0) stringResource(R.string.perf_root_cap_off) else stringResource(R.string.perf_root_cpu_cap_percent, pct)
                 },
                 rootPrimeCapPercent, onPick = onRootPrimeCapPercent,
+            )
+            ChoiceRow(
+                host, "rootwatt", stringResource(R.string.perf_root_watt),
+                stringResource(R.string.perf_root_watt_hint),
+                com.droiddeck.launcher.session.RootPerfProfile.WATT_TARGETS.map { tenths ->
+                    tenths to if (tenths == 0) stringResource(R.string.perf_root_cap_off) else stringResource(R.string.perf_root_watt_value, tenths / 10.0)
+                },
+                rootWattTargetTenths, onPick = onRootWattTargetTenths,
+            )
+            ToggleRow(
+                host, "rootquiet", stringResource(R.string.perf_root_quiet),
+                stringResource(R.string.perf_root_quiet_hint),
+                rootQuietBackground, onChange = onRootQuietBackground,
             )
             ToggleRow(
                 host, "matchrefresh", stringResource(R.string.perf_match_refresh),

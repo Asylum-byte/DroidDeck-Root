@@ -19,22 +19,27 @@ object RootPerfProfile {
     val CPU_CAPS = listOf(0, 90, 80, 70)
     /** Extra limit for the fastest cluster only (the two prime cores), which burns the most per MHz. */
     val PRIME_CAPS = listOf(0, 80, 70, 60, 50)
+    /** Power targets for the governor in tenths of a watt (0 = none). */
+    val WATT_TARGETS = listOf(0, 45, 50, 55, 60, 70, 80)
 
     // Nubia/RedMagic kernels expose the built-in fan here; other devices simply lack the nodes.
     private const val FAN_ENABLE = "/sys/kernel/fan/fan_enable"
     private const val FAN_LEVEL = "/sys/kernel/fan/fan_speed_level"
     private const val FAN_TOP_LEVEL = "5"
 
-    private val NODE = Regex("^/sys/[A-Za-z0-9_./-]+$")
+    private val NODE = Regex("^(/sys|/dev/cpuset)/[A-Za-z0-9_./-]+$")
+    /** Android's groups for apps that are not on screen; narrowing them keeps their work off the game's cores. */
+    private val BACKGROUND_SETS = listOf("/dev/cpuset/background/cpus", "/dev/cpuset/system-background/cpus")
 
-    data class Settings(val profile: String, val fan: Boolean, val gpuCapMhz: Int, val cpuCapPercent: Int, val primeCapPercent: Int = 0) {
-        val off: Boolean get() = profile == OFF && !fan && gpuCapMhz <= 0 && cpuCapPercent <= 0 && primeCapPercent <= 0
+    data class Settings(val profile: String, val fan: Boolean, val gpuCapMhz: Int, val cpuCapPercent: Int, val primeCapPercent: Int = 0,
+                        val quietBackground: Boolean = false) {
+        val off: Boolean get() = profile == OFF && !fan && gpuCapMhz <= 0 && cpuCapPercent <= 0 && primeCapPercent <= 0 && !quietBackground
     }
 
     fun globalSettings(context: Context) = Settings(
         SessionPrefs.rootPerfProfile(context), SessionPrefs.rootFanMax(context),
         SessionPrefs.rootGpuCapMhz(context), SessionPrefs.rootCpuCapPercent(context),
-        SessionPrefs.rootPrimeCapPercent(context),
+        SessionPrefs.rootPrimeCapPercent(context), SessionPrefs.rootQuietBackground(context),
     )
 
     /** Swaps the running session over to other settings, undoing the previous ones first. */
@@ -52,7 +57,8 @@ object RootPerfProfile {
         if (settings.off) return "root perf: off"
         if (!RootShell.available()) return "root perf: no root, left alone"
         restore(context)
-        val probe = listOf("$KGSL/min_pwrlevel", "$KGSL/max_pwrlevel", "$KGSL/num_pwrlevels", "$KGSL/max_clock_mhz", FAN_ENABLE, FAN_LEVEL)
+        val probe = listOf("$KGSL/min_pwrlevel", "$KGSL/max_pwrlevel", "$KGSL/num_pwrlevels", "$KGSL/max_clock_mhz", FAN_ENABLE, FAN_LEVEL) +
+            BACKGROUND_SETS
         val present = RootShell.run(listOf("for p in ${probe.joinToString(" ")}; do [ -e \$p ] && echo \$p; done"))
             .output.lines().map { it.trim() }.toSet()
         val gpuLevels = RootShell.run(listOf("cat $KGSL/num_pwrlevels 2>/dev/null")).lastLine.toLongOrNull()
@@ -63,6 +69,8 @@ object RootPerfProfile {
         val writes = plan(profile, fan, present, gpuLevels, capLevel, cpuCap, settings.primeCapPercent).toMutableList()
         val capMhz = capLevel?.let { (gpuFreqs[it] / 1_000_000).toInt() } ?: gpuCap.takeIf { it > 0 }
         if (capMhz != null && "$KGSL/max_clock_mhz" in present) writes += "$KGSL/max_clock_mhz" to capMhz.toString()
+        val quietCores = if (settings.quietBackground) backgroundCores() else null
+        if (quietCores != null) BACKGROUND_SETS.filter { it in present }.forEach { writes += it to quietCores }
         if (writes.isEmpty()) return "root perf: nothing to change on this device"
         val snapshot = RootShell.run(writes.map { (path, _) -> "echo \"$path=$(cat $path 2>/dev/null)\"" })
         val saved = snapshot.output.lines().filter { line ->
@@ -82,6 +90,7 @@ object RootPerfProfile {
             capMhz?.let { "gpu <= $it MHz" + if (capLevel == null) " (no level table, clock node only)" else "" },
             cpuCap.takeIf { it > 0 }?.let { "cpu <= $it %" },
             settings.primeCapPercent.takeIf { it > 0 }?.let { "prime <= $it %" },
+            quietCores?.let { "background apps on cpu $it" },
         ).joinToString(", ")
         val summary = "root perf: $profile${if (fan) " + fan" else ""}${if (caps.isNotEmpty()) ", $caps" else ""}, ${writes.size} nodes"
         return if (applied.ok) summary else "$summary (some writes refused: ${applied.output.trim().take(200)})"
@@ -107,7 +116,7 @@ object RootPerfProfile {
         val snap = File(context.filesDir, SNAPSHOT).absolutePath
         val inner = "echo \$\$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null; " +
             "while [ -d /proc/$app ]; do sleep 3; done; " +
-            "[ -f $snap ] && { tac $snap | while IFS== read -r p v; do case \"\$p\" in /sys/*) echo \"\$v\" > \"\$p\";; esac; done; rm -f $snap; }"
+            "[ -f $snap ] && { tac $snap | while IFS== read -r p v; do case \"\$p\" in /sys/*|/dev/cpuset/*) echo \"\$v\" > \"\$p\";; esac; done; rm -f $snap; }"
         val result = RootShell.run(listOf("setsid sh -c '$inner' </dev/null >/dev/null 2>&1 &"))
         if (result.ok) watchdogPid = app
         Log.i(TAG, "watchdog: restore on app exit ${if (result.ok) "armed" else "failed (${result.output.trim().take(120)})"}")
@@ -151,7 +160,7 @@ object RootPerfProfile {
     /** The built-in fan right now: true/false, or null when the device has no fan node or no root. */
     fun fanOn(): Boolean? {
         if (!RootShell.known()) return null
-        return when (RootShell.run(listOf("cat $FAN_ENABLE 2>/dev/null"), 5).lastLine.trim()) {
+        return when (RootShell.query("cat $FAN_ENABLE 2>/dev/null")?.trim()) {
             "1" -> true
             "0" -> false
             else -> null
@@ -235,6 +244,20 @@ object RootPerfProfile {
             if (FAN_LEVEL in present) writes += FAN_LEVEL to FAN_TOP_LEVEL
         }
         return writes
+    }
+
+    /**
+     * Two cores of the slower cluster for background apps, e.g. "0-1"; null when the device has a single
+     * cluster or too few cores to spare.
+     */
+    private fun backgroundCores(): String? {
+        val policies = File(CPUFREQ).listFiles { f -> f.name.startsWith("policy") }.orEmpty()
+        if (policies.size < 2) return null
+        val slow = policies.minByOrNull { readLong(File(it, "cpuinfo_max_freq")) ?: Long.MAX_VALUE } ?: return null
+        val cpus = runCatching { File(slow, "related_cpus").readText().trim().split(Regex("\\s+")).mapNotNull { it.toIntOrNull() } }
+            .getOrNull().orEmpty().sorted()
+        if (cpus.size < 4) return null
+        return "${cpus[0]}-${cpus[1]}".takeIf { cpus[1] == cpus[0] + 1 } ?: "${cpus[0]},${cpus[1]}"
     }
 
     private fun nearestBelow(policy: File, target: Long): Long? {

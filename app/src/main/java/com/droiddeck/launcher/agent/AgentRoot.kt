@@ -28,8 +28,11 @@ internal object AgentRoot {
                 pick(request, "cpuCapPercent", RootPerfProfile.CPU_CAPS, old.cpuCapPercent),
                 pick(request, "boost", RootGameBoost.LEVELS, old.boost),
                 pick(request, "primeCapPercent", RootPerfProfile.PRIME_CAPS, old.primeCapPercent),
+                pick(request, "fpsLimit", RootGameProfiles.FPS_LIMITS, old.fpsLimit),
             )
             RootGameProfiles.set(context, scope, next)
+            // A change to the running game's profile takes effect right away.
+            if (RootGameProfiles.runningScope(context) == scope) RootGameProfiles.applyNow(context, RootGameProfiles.effective(context, scope))
             profile(context, scope)
         }
         "global" -> {
@@ -44,17 +47,30 @@ internal object AgentRoot {
                     v.getString("profile").takeIf { it in setOf(RootPerfProfile.OFF, RootPerfProfile.EFFICIENT, RootPerfProfile.PERFORMANCE) }
                         ?: throw AgentException("INVALID_REQUEST", "profile must be off, efficient or performance"))
                 if (v.has("chroot")) SessionPrefs.setRootChroot(context, v.getBoolean("chroot"))
-                if (v.has("softThrottle")) {
-                    SessionPrefs.setRootSoftThrottle(context, v.getBoolean("softThrottle"))
-                    if (com.droiddeck.launcher.session.SessionState.running) {
-                        if (v.getBoolean("softThrottle")) com.droiddeck.launcher.session.RootSoftThrottle.start(context) {}
-                        else { com.droiddeck.launcher.session.RootSoftThrottle.stop(); RootGameProfiles.setThermalCap(context, 0) }
-                    }
+                if (v.has("quietBackground")) SessionPrefs.setRootQuietBackground(context, v.getBoolean("quietBackground"))
+                if (v.has("softThrottle")) SessionPrefs.setRootSoftThrottle(context, v.getBoolean("softThrottle"))
+                if (v.has("wattTarget")) {
+                    val watt = v.getDouble("wattTarget")
+                    if (watt != 0.0 && (watt < 3.0 || watt > 12.0)) throw AgentException("INVALID_REQUEST", "wattTarget must be 0 (off) or 3 to 12")
+                    SessionPrefs.setRootWattTargetTenths(context, Math.round(watt * 10).toInt())
+                }
+                if ((v.has("softThrottle") || v.has("wattTarget")) && com.droiddeck.launcher.session.SessionState.running) {
+                    // Restart the governor with the new settings; hand back whatever it was holding.
+                    val governor = com.droiddeck.launcher.session.RootSoftThrottle
+                    governor.stop()
+                    RootGameProfiles.setThermalCap(context, 0)
+                    RootGameProfiles.applied?.let { RootGameProfiles.applyNow(context, it) }
+                    governor.start(context) { line -> android.util.Log.i("AgentRoot", line) }
                 }
             }
             status(context)
         }
         "frames" -> frames()
+        "live" -> status(context).put("sensors", sensors(context)).put("frames", frames().apply { remove("graphMs") })
+            .put("session", JSONObject().put("running", com.droiddeck.launcher.session.SessionState.running)
+                .put("mode", com.droiddeck.launcher.session.SessionState.mode))
+        "measure" -> measure(context, request)
+        "display" -> display(context, request)
         "dx" -> directX(context, request)
         "fan" -> {
             val on = if (request.has("on")) RootPerfProfile.setFan(request.getBoolean("on")) else RootPerfProfile.fanOn()
@@ -72,15 +88,21 @@ internal object AgentRoot {
                     primeCapPercent = if (request.has("primeCapPercent")) checked(request.getInt("primeCapPercent"), RootPerfProfile.PRIME_CAPS) else base.perf.primeCapPercent,
                 ),
                 if (request.has("boost")) checked(request.getInt("boost"), RootGameBoost.LEVELS) else base.boost,
+                if (request.has("fpsLimit")) checked(request.getInt("fpsLimit"), RootGameProfiles.FPS_LIMITS) else base.fpsLimit,
             )
+            // The tuner steps settings itself; the governor waits until the trial is over.
+            com.droiddeck.launcher.session.RootSoftThrottle.paused = true
             JSONObject().put("scope", scope).put("applied", RootGameProfiles.applyNow(context, next))
+                .put("fpsLimit", com.droiddeck.launcher.session.LiveFpsLimit.current)
+                .put("fpsLimitWorks", com.droiddeck.launcher.session.LiveFpsLimit.works ?: JSONObject.NULL)
         }
         "trialEnd" -> {
+            com.droiddeck.launcher.session.RootSoftThrottle.paused = false
             val scope = RootGameProfiles.runningScope(context)
             JSONObject().put("scope", scope ?: JSONObject.NULL)
                 .put("applied", RootGameProfiles.applyNow(context, RootGameProfiles.effective(context, scope)))
         }
-        else -> throw AgentException("INVALID_REQUEST", "root op '$op' is not status, games, get, set, global, frames, thermal, env, trial or trialEnd")
+        else -> throw AgentException("INVALID_REQUEST", "root op '$op' is not status, live, measure, games, get, set, global, frames, thermal, display, dx, fan, env, trial or trialEnd")
     }.put("ok", true).put("command", "root")
 
     private fun frames(): JSONObject {
@@ -206,8 +228,13 @@ internal object AgentRoot {
                 .put("boost", SessionPrefs.rootGameBoost(context))
                 .put("matchRefresh", SessionPrefs.matchRefreshToGame(context))
                 .put("chroot", SessionPrefs.rootChroot(context))
-                .put("softThrottle", SessionPrefs.rootSoftThrottle(context)))
+                .put("softThrottle", SessionPrefs.rootSoftThrottle(context))
+                .put("wattTarget", SessionPrefs.rootWattTargetTenths(context) / 10.0)
+                .put("quietBackground", SessionPrefs.rootQuietBackground(context)))
             .put("thermalCapMhz", RootGameProfiles.thermalCapMhz)
+            .put("liveFpsLimit", com.droiddeck.launcher.session.LiveFpsLimit.current)
+            .put("governorFpsLimit", com.droiddeck.launcher.session.RootSoftThrottle.fpsLimit)
+            .put("fpsLimitWorks", com.droiddeck.launcher.session.LiveFpsLimit.works ?: JSONObject.NULL)
             .put("fanOn", RootPerfProfile.fanOn() ?: JSONObject.NULL)
             .put("gameFpsLimit", com.droiddeck.launcher.session.SessionState.gameFpsLimit)
             .put("refreshHz", com.droiddeck.launcher.session.SessionState.refreshHz.toDouble())
@@ -216,7 +243,83 @@ internal object AgentRoot {
                 .put("gpuCapMhz", JSONArray(RootPerfProfile.GPU_CAPS))
                 .put("cpuCapPercent", JSONArray(RootPerfProfile.CPU_CAPS))
                 .put("primeCapPercent", JSONArray(RootPerfProfile.PRIME_CAPS))
-                .put("boost", JSONArray(RootGameBoost.LEVELS)))
+                .put("boost", JSONArray(RootGameBoost.LEVELS))
+                .put("fpsLimit", JSONArray(RootGameProfiles.FPS_LIMITS)))
+    }
+
+    private fun sensors(context: Context): JSONObject {
+        val r = com.droiddeck.launcher.session.RootSensors.read(context) ?: return JSONObject().put("available", false)
+        return JSONObject().put("available", true)
+            .put("skinC", r.skin ?: JSONObject.NULL).put("gpuC", r.gpuC ?: JSONObject.NULL).put("batteryC", r.batteryC ?: JSONObject.NULL)
+            .put("gpuMhz", r.gpuMhz ?: JSONObject.NULL).put("gpuMaxMhz", r.gpuMaxMhz ?: JSONObject.NULL)
+            .put("gpuBusy", r.gpuBusy ?: JSONObject.NULL).put("watt", r.watt ?: JSONObject.NULL)
+            .put("fanRpm", r.fanRpm ?: JSONObject.NULL).put("charging", r.charging)
+    }
+
+    /**
+     * Samples frame times and sensors inside the app for a few seconds and returns the raw series. One agent call
+     * per measurement instead of one every few seconds keeps the measuring itself out of the power reading.
+     */
+    private fun measure(context: Context, request: JSONObject): JSONObject {
+        val seconds = request.optInt("seconds", 20).coerceIn(4, 60)
+        val live = com.droiddeck.launcher.hud.LiveFrames
+        val frameTimes = JSONArray()
+        val fps = JSONArray()
+        val samples = JSONArray()
+        val graph = FloatArray(com.droiddeck.launcher.hud.FrameStats.GRAPH_FRAMES)
+        var engine = ""
+        val end = System.currentTimeMillis() + seconds * 1000L
+        val started = System.currentTimeMillis()
+        while (System.currentTimeMillis() < end) {
+            val stats = live.stats
+            val fresh = stats != null && (System.nanoTime() - live.updatedNs) < 5_000_000_000L
+            if (!fresh) return JSONObject().put("available", false)
+            engine = live.engine.ifEmpty { engine }
+            val now = stats!!.fps
+            if (now > 1f) {
+                fps.put(now.toDouble())
+                stats.graph(graph)
+                // The graph holds the latest frames; take about as many as arrived since the last look.
+                val count = Math.round(now * INTERVAL_S).coerceIn(1, graph.size)
+                for (i in graph.size - count until graph.size) if (graph[i] > 0f) frameTimes.put(graph[i].toDouble())
+            }
+            com.droiddeck.launcher.session.RootSensors.read(context)?.let { r ->
+                samples.put(JSONObject().put("t", (System.currentTimeMillis() - started) / 1000.0)
+                    .put("skinC", r.skin ?: JSONObject.NULL).put("gpuC", r.gpuC ?: JSONObject.NULL).put("batteryC", r.batteryC ?: JSONObject.NULL)
+                    .put("gpuMhz", r.gpuMhz ?: JSONObject.NULL).put("gpuBusy", r.gpuBusy ?: JSONObject.NULL)
+                    .put("watt", r.watt ?: JSONObject.NULL).put("charging", r.charging))
+            }
+            try { Thread.sleep((INTERVAL_S * 1000).toLong()) } catch (_: InterruptedException) { break }
+        }
+        return JSONObject().put("available", true).put("engine", engine).put("fps", fps).put("frameTimesMs", frameTimes)
+            .put("samples", samples).put("fpsLimit", com.droiddeck.launcher.session.LiveFpsLimit.current)
+            .put("runningGame", RootGameProfiles.runningScope(context) ?: JSONObject.NULL)
+    }
+
+    private const val INTERVAL_S = 2.0f
+
+    /** Session resolution (next session) and upscaler: read, or set with {"scale": 1|1.3|1.5|2, "upscaler": id}. */
+    private fun display(context: Context, request: JSONObject): JSONObject {
+        val mode = com.droiddeck.launcher.session.SessionService.MODE_STEAM
+        val display = com.droiddeck.launcher.session.SessionDisplay
+        if (request.has("scale")) {
+            val scale = request.getDouble("scale").toFloat()
+            val choice = if (scale <= 1.01f) display.FOLLOW_SCREEN
+            else display.followScaled(display.parseFollowScale(scale.toString())
+                ?: throw AgentException("INVALID_REQUEST", "scale must be 1 or between 1.1 and ${display.FOLLOW_SCALE_MAX}"))
+            SessionPrefs.setResolutionChoice(context, mode, choice)
+        }
+        if (request.has("upscaler")) {
+            val id = request.getInt("upscaler")
+            if (SessionPrefs.upscalerChoices.none { it.first == id }) throw AgentException("INVALID_REQUEST", "unknown upscaler $id")
+            SessionPrefs.setUpscaler(context, id)
+        }
+        val choice = SessionPrefs.resolutionChoice(context, mode, display.panelSize(context))
+        val upscalers = JSONArray()
+        SessionPrefs.upscalerChoices(context).forEach { (id, label) -> upscalers.put(JSONObject().put("id", id).put("name", label)) }
+        return JSONObject().put("resolution", choice)
+            .put("scale", display.followScale(choice)?.toDouble() ?: JSONObject.NULL)
+            .put("upscaler", SessionPrefs.upscaler(context)).put("upscalers", upscalers)
     }
 
     private fun games(context: Context): JSONObject {
@@ -239,7 +342,7 @@ internal object AgentRoot {
         return JSONObject().put("scope", scope).put("profile", encode(RootGameProfiles.get(context, scope)))
             .put("effective", JSONObject().put("gpuCapMhz", effective.perf.gpuCapMhz)
                 .put("cpuCapPercent", effective.perf.cpuCapPercent).put("primeCapPercent", effective.perf.primeCapPercent)
-                .put("boost", effective.boost))
+                .put("boost", effective.boost).put("fpsLimit", effective.fpsLimit))
     }
 
     private fun encode(p: RootGameProfiles.Profile) = JSONObject()
@@ -247,6 +350,7 @@ internal object AgentRoot {
         .put("cpuCapPercent", p.cpuCapPercent.takeIf { it != INHERIT } ?: JSONObject.NULL)
         .put("boost", p.boost.takeIf { it != INHERIT } ?: JSONObject.NULL)
         .put("primeCapPercent", p.primeCapPercent.takeIf { it != INHERIT } ?: JSONObject.NULL)
+        .put("fpsLimit", p.fpsLimit.takeIf { it != INHERIT } ?: JSONObject.NULL)
 
     private fun scope(request: JSONObject): String = request.optString("scope").takeIf { it.matches(Regex("[1-9][0-9]{0,9}")) }
         ?: throw AgentException("INVALID_REQUEST", "scope must be the game's profile key (decimal)")

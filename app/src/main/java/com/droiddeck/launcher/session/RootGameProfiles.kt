@@ -13,23 +13,29 @@ object RootGameProfiles {
     private const val GAME_FILE = "droiddeck-game"
     private const val POLL_MS = 2000L
 
+    /** Live frame limits a game profile can ask for (0 = none). */
+    val FPS_LIMITS = listOf(0, 30, 35, 40, 45, 50, 55, 60, 90, 120)
+
     data class Profile(val gpuCapMhz: Int = INHERIT, val cpuCapPercent: Int = INHERIT, val boost: Int = INHERIT,
-                       val primeCapPercent: Int = INHERIT) {
-        val empty: Boolean get() = gpuCapMhz == INHERIT && cpuCapPercent == INHERIT && boost == INHERIT && primeCapPercent == INHERIT
+                       val primeCapPercent: Int = INHERIT, val fpsLimit: Int = INHERIT) {
+        val empty: Boolean get() = gpuCapMhz == INHERIT && cpuCapPercent == INHERIT && boost == INHERIT &&
+            primeCapPercent == INHERIT && fpsLimit == INHERIT
     }
 
-    data class Effective(val perf: RootPerfProfile.Settings, val boost: Int)
+    /** fpsLimit is the live frame limit (gamescope), applied without restarting the game; 0 = none. */
+    data class Effective(val perf: RootPerfProfile.Settings, val boost: Int, val fpsLimit: Int = 0)
 
     fun get(context: Context, scope: String): Profile {
         val raw = prefs(context).getString(scope, null) ?: return Profile()
         val parts = raw.split(',').map { it.trim().toIntOrNull() ?: INHERIT }
         return Profile(parts.getOrElse(0) { INHERIT }, parts.getOrElse(1) { INHERIT }, parts.getOrElse(2) { INHERIT },
-            parts.getOrElse(3) { INHERIT })
+            parts.getOrElse(3) { INHERIT }, parts.getOrElse(4) { INHERIT })
     }
 
     fun set(context: Context, scope: String, profile: Profile) {
         prefs(context).edit().apply {
-            if (profile.empty) remove(scope) else putString(scope, "${profile.gpuCapMhz},${profile.cpuCapPercent},${profile.boost},${profile.primeCapPercent}")
+            if (profile.empty) remove(scope) else putString(scope,
+                "${profile.gpuCapMhz},${profile.cpuCapPercent},${profile.boost},${profile.primeCapPercent},${profile.fpsLimit}")
         }.apply()
     }
 
@@ -43,6 +49,7 @@ object RootGameProfiles {
                 primeCapPercent = game.primeCapPercent.takeIf { it != INHERIT } ?: global.primeCapPercent,
             ),
             game.boost.takeIf { it != INHERIT } ?: SessionPrefs.rootGameBoost(context),
+            game.fpsLimit.takeIf { it != INHERIT } ?: 0,
         )
     }
 
@@ -70,8 +77,14 @@ object RootGameProfiles {
         val wanted = withThermal(next.perf)
         val perf = if (wanted != onDevice) RootPerfProfile.switchTo(context, wanted).also { onDevice = wanted } else "clocks unchanged"
         if (next.boost != before.boost) RootGameBoost.setLevel(context, next.boost)
+        // The governor may be holding a lower limit; the profile's own limit only replaces it when it is lower still.
+        val held = RootSoftThrottle.fpsLimit
+        val limit = if (held > 0 && (next.fpsLimit == 0 || held < next.fpsLimit)) held else next.fpsLimit
+        val frames = if (limit != LiveFpsLimit.current) {
+            if (LiveFpsLimit.set(context, limit)) (if (limit > 0) ", frames <= $limit" else ", frame limit off") else ", frame limit not available"
+        } else ""
         applied = next
-        return "$perf, boost ${next.boost}"
+        return "$perf, boost ${next.boost}$frames"
     }
 
     /** The soft throttle moved its limit; re-applies the current profile with it. */
@@ -83,10 +96,11 @@ object RootGameProfiles {
         return applyNow(context, base)
     }
 
-    /** The running game's own FPS limit (DXVK/VKD3D variable), so the display can follow it. */
+    /** The running game's FPS limit (its profile's live limit, else the DXVK/VKD3D variable), so the display can follow it. */
     private fun publishFpsLimit(context: Context, scope: String?) {
         val fps = scope?.let { s ->
             runCatching {
+                get(context, s).fpsLimit.takeIf { it > 0 }?.let { return@runCatching it }
                 val config = GameEnvironmentStore.read(context)
                 val vars = config.shared + config.games[s].orEmpty()
                 listOf("VKD3D_FRAME_RATE", "DXVK_FRAME_RATE").firstNotNullOfOrNull { vars[it]?.trim()?.toIntOrNull()?.takeIf { n -> n in 15..240 } }
@@ -115,6 +129,7 @@ object RootGameProfiles {
         thermalCapMhz = 0
         watcher = Thread({
             var current: String? = null
+            var polls = 0
             while (!Thread.currentThread().isInterrupted) {
                 val scope = runCatching { file.readText().trim() }.getOrNull()?.takeIf { it.matches(Regex("[1-9][0-9]{0,9}")) }
                 if (scope != current) {
@@ -124,6 +139,9 @@ object RootGameProfiles {
                     if (next != applied) report("game profile ${scope ?: "none (global)"}: ${applyNow(app, next)}")
                     else Log.i(TAG, "game ${scope ?: "-"} uses the global root settings")
                 }
+                // A limit that could not be set at game start (guest agent not up yet) is tried again now and then.
+                if (++polls % 5 == 0) applied?.fpsLimit?.takeIf { it > 0 && LiveFpsLimit.current == 0 && RootSoftThrottle.fpsLimit == 0 }
+                    ?.let { LiveFpsLimit.set(app, it) }
                 try { Thread.sleep(POLL_MS) } catch (_: InterruptedException) { break }
             }
         }, "root-game-profiles").apply { isDaemon = true; start() }
@@ -136,6 +154,7 @@ object RootGameProfiles {
         applied = null
         onDevice = null
         SessionState.gameFpsLimit = 0
+        LiveFpsLimit.reset()
         thermalCapMhz = 0
         // The guest's cleanup child dies with the session, so the marker is removed here too.
         gameFile?.delete()
