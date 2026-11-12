@@ -53,10 +53,12 @@ object RootPerfProfile {
         val gpuCap = settings.gpuCapMhz
         val cpuCap = settings.cpuCapPercent
         stopGuard()
-        if (File(context.filesDir, SNAPSHOT).exists() && RootShell.known()) restore(context)
+        // Switching settings mid-session undoes the old ones first; with the fan staying on, its node is left
+        // out of that, or the fan stopped for a second on every switch (each governor step, each tuning trial).
+        if (File(context.filesDir, SNAPSHOT).exists() && RootShell.known()) restore(context, keepFan = fan)
         if (settings.off) return "root perf: off"
         if (!RootShell.available()) return "root perf: no root, left alone"
-        restore(context)
+        restore(context, keepFan = fan)
         val probe = listOf("$KGSL/min_pwrlevel", "$KGSL/max_pwrlevel", "$KGSL/num_pwrlevels", "$KGSL/max_clock_mhz", FAN_ENABLE, FAN_LEVEL) +
             BACKGROUND_SETS
         val present = RootShell.run(listOf("for p in ${probe.joinToString(" ")}; do [ -e \$p ] && echo \$p; done"))
@@ -182,14 +184,15 @@ object RootPerfProfile {
         if (File(context.filesDir, SNAPSHOT).exists() && RootShell.available()) restore(context)
     }
 
-    private fun restore(context: Context) {
+    private fun restore(context: Context, keepFan: Boolean = false) {
         val file = File(context.filesDir, SNAPSHOT)
         if (!file.exists()) return
         val lines = file.readLines().filter { it.isNotBlank() }
         val commands = lines.reversed().mapNotNull { line ->
             val path = line.substringBefore('=')
             val value = line.substringAfter('=').trim()
-            if (!NODE.matches(path) || value.isEmpty() || value.any { it == '\'' || it == '\n' }) null
+            if (keepFan && (path == FAN_ENABLE || path == FAN_LEVEL)) null
+            else if (!NODE.matches(path) || value.isEmpty() || value.any { it == '\'' || it == '\n' }) null
             else "echo '$value' > $path"
         }
         if (commands.isNotEmpty()) {
