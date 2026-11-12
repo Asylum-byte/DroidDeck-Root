@@ -7,10 +7,11 @@ import android.util.Log
  * Governor for long play without a cooler. It steps the game down a little when the phone gets warm or draws
  * more than the chosen power target, and gives the steps back when there is room again.
  *
- * It lowers the frame rate first (gamescope's live limiter, 5 FPS a step): on this hardware the power goes
- * with the frame rate - CPU and translation work - while the GPU is often half idle, so a GPU clock limit
- * saves little. Where no live limit exists (sessions without gamescope, or a limiter that shows no effect)
- * it falls back to lowering the GPU limit as before.
+ * It lowers the frame rate first, with gamescope's live limiter: on this hardware the power goes with the
+ * frame rate - CPU and translation work - while the GPU is often half idle, so a GPU clock limit saves
+ * little. The limiter only holds rates that divide a refresh rate of the panel, so the steps are those
+ * rates (60, 48, 45, 40, 36, 30 on a 144 Hz panel), not a fixed 5 FPS. Where no live limit exists (sessions
+ * without gamescope, or a limiter that shows no effect) it falls back to lowering the GPU limit as before.
  *
  * Measured on the RedMagic 11 Pro: Android cuts the GPU once the skin sensor reaches about 43-44 °C and
  * releases it around 41 °C, while the GPU itself is only at ~60 °C and the battery at ~37 °C. So the skin
@@ -19,7 +20,6 @@ import android.util.Log
 object RootSoftThrottle {
     private const val TAG = "RootSoftThrottle"
     private val GPU_STEPS = listOf(0, 1000, 900, 800, 700, 650)
-    private const val FPS_STEP = 5
     private const val FPS_FLOOR = 30
     private const val FPS_DEFAULT_BASE = 60
     private const val SKIN_HOT_C = 41.5
@@ -33,9 +33,11 @@ object RootSoftThrottle {
     private const val UP_EVERY_MS = 45_000L
     /** Power is averaged over this many readings (about 20 s) so one loading screen doesn't move a step. */
     private const val WATT_WINDOW = 5
-    /** One 5 FPS step is worth roughly 0.4-0.5 W here; the band is wider so the steps don't flip back and forth. */
     private const val WATT_OVER = 0.3
+    /** GPU steps only: how far under the target the draw has to be before a step is given back. */
     private const val WATT_UNDER = 0.6
+    /** Roughly what the phone draws with the game standing still; only the rest goes up with the frame rate. */
+    private const val IDLE_WATT = 2.0
 
     @Volatile private var thread: Thread? = null
 
@@ -65,8 +67,8 @@ object RootSoftThrottle {
     }
 
     /**
-     * Where the steps count down from: the game's own limit, else what it reaches right now rounded up to a
-     * step - a game that only makes 45 FPS gains nothing from a limit of 55.
+     * Where the steps count down from: the game's own limit, else what it reaches right now - a game that
+     * only makes 45 FPS gains nothing from a limit of 48.
      */
     private fun baseFps(): Int {
         RootGameProfiles.applied?.fpsLimit?.takeIf { it > 0 }?.let { return it }
@@ -74,7 +76,7 @@ object RootSoftThrottle {
         val stats = com.droiddeck.launcher.hud.LiveFrames.stats
         val fresh = (System.nanoTime() - com.droiddeck.launcher.hud.LiveFrames.updatedNs) < 3_000_000_000L
         val now = if (stats != null && fresh) stats.fps else return FPS_DEFAULT_BASE
-        return (kotlin.math.ceil(now / FPS_STEP).toInt() * FPS_STEP).coerceIn(FPS_FLOOR + FPS_STEP, 120)
+        return kotlin.math.ceil(now - 0.5).toInt().coerceIn(FPS_FLOOR + 1, 144)
     }
 
     private fun loop(context: Context, report: (String) -> Unit) {
@@ -87,6 +89,8 @@ object RootSoftThrottle {
         var lastChange = 0L
         var useFps = true
         var base = FPS_DEFAULT_BASE
+        // The limits below the base the limiter can hold, highest first; step n is ladder[n - 1].
+        var ladder = emptyList<Int>()
         val watts = ArrayDeque<Double>()
         while (!Thread.currentThread().isInterrupted) {
             val r = runCatching { RootSensors.read(context) }.getOrNull()
@@ -101,15 +105,29 @@ object RootSoftThrottle {
                 val cool = !thermal || ((r.skin == null || r.skin <= SKIN_COOL_C) && (r.gpuC == null || r.gpuC <= GPU_COOL_C) &&
                     (r.skin != null || r.batteryC == null || r.batteryC <= BATTERY_COOL_C))
                 val over = budget && watt!! > target + WATT_OVER
-                val under = !budget || watt!! < target - WATT_UNDER
                 if (useFps && LiveFpsLimit.works == false) {
                     useFps = false
                     step = 0
                     fpsLimit = 0
                     report("governor: the live frame limit shows no effect here, using the GPU limit instead")
                 }
-                if (step == 0) base = baseFps()
-                val maxStep = if (useFps) ((base - FPS_FLOOR) / FPS_STEP).coerceAtLeast(0) else GPU_STEPS.lastIndex
+                if (step == 0) {
+                    base = baseFps()
+                    ladder = if (useFps) LiveFpsLimit.achievable(context).filter { it in FPS_FLOOR until base } else emptyList()
+                }
+                val byFps = useFps && ladder.isNotEmpty()
+                val maxStep = if (byFps) ladder.size else GPU_STEPS.lastIndex
+                // A frame step is large (60 -> 48), so giving one back is judged by what the draw would be
+                // at the higher rate, not by a fixed margin: otherwise the steps flip back and forth.
+                val under = when {
+                    !budget -> true
+                    byFps && step in 1..ladder.size -> {
+                        val here = ladder[step - 1]
+                        val above = if (step == 1) base else ladder[step - 2]
+                        watt!! + (watt - IDLE_WATT).coerceAtLeast(0.0) * (above.toDouble() / here - 1) <= target
+                    }
+                    else -> watt!! < target - WATT_UNDER
+                }
                 val next = when {
                     (hot || over) && step < maxStep && now - lastChange >= DOWN_EVERY_MS -> step + 1
                     cool && under && step > 0 && now - lastChange >= UP_EVERY_MS -> step - 1
@@ -117,10 +135,10 @@ object RootSoftThrottle {
                 }
                 if (next != step) {
                     val why = "skin ${r.skin?.let { "%.1f".format(it) } ?: "?"} °C, ${watt?.let { "%.1f".format(it) } ?: "?"} W"
-                    val applied = if (useFps) {
+                    val applied = if (byFps) {
                         // Step 0 hands the game back its own limit (or none), not the governor's base.
                         val own = RootGameProfiles.applied?.fpsLimit ?: 0
-                        val limit = if (next == 0) own else (base - next * FPS_STEP).coerceAtLeast(FPS_FLOOR)
+                        val limit = if (next == 0) own else ladder[(next - 1).coerceAtMost(ladder.lastIndex)]
                         if (LiveFpsLimit.set(context, limit)) {
                             fpsLimit = if (next == 0) 0 else limit
                             if (next == 0) "frame limit released" else "frames <= $limit"

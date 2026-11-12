@@ -194,6 +194,8 @@ class FrontEndActivity : ComponentActivity() {
     private var rootPrimeCapPercent by mutableStateOf(0)
     private var rootWattTargetTenths by mutableStateOf(0)
     private var rootQuietBackground by mutableStateOf(false)
+    private var rootSteamThrottle by mutableStateOf(false)
+    private var sessionBrightness by mutableStateOf(0)
     private var matchRefresh by mutableStateOf(true)
     private var prootNoSeccomp by mutableStateOf(false)
     private var prootFastPath by mutableStateOf(true)
@@ -2616,7 +2618,7 @@ class FrontEndActivity : ComponentActivity() {
             rootPerfProfile = rootPerfProfile, rootFanMax = rootFanMax, rootAutoPhantom = rootAutoPhantom, rootChroot = rootChroot, rootGameBoost = rootGameBoost, rootSoftThrottle = rootSoftThrottle,
             rootGpuCapMhz = rootGpuCapMhz, rootCpuCapPercent = rootCpuCapPercent,
             rootPrimeCapPercent = rootPrimeCapPercent, matchRefresh = matchRefresh,
-            rootWattTargetTenths = rootWattTargetTenths, rootQuietBackground = rootQuietBackground,
+            rootWattTargetTenths = rootWattTargetTenths, rootQuietBackground = rootQuietBackground, rootSteamThrottle = rootSteamThrottle, sessionBrightness = sessionBrightness,
             ramCapMb = ramCapMb, vramCapMb = vramCapMb, zramClient = zramClient,
             deviceRamMb = (android.app.ActivityManager.MemoryInfo()
                 .also((getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager)::getMemoryInfo).totalMem / (1024 * 1024)).toInt(),
@@ -2650,6 +2652,8 @@ class FrontEndActivity : ComponentActivity() {
             onMatchRefresh = { on -> SessionPrefs.setMatchRefreshToGame(this, on); matchRefresh = on },
             onRootWattTargetTenths = { t -> SessionPrefs.setRootWattTargetTenths(this, t); rootWattTargetTenths = t },
             onRootQuietBackground = { on -> SessionPrefs.setRootQuietBackground(this, on); rootQuietBackground = on },
+            onRootSteamThrottle = { on -> SessionPrefs.setRootSteamThrottle(this, on); rootSteamThrottle = on },
+            onSessionBrightness = { pct -> SessionPrefs.setSessionBrightnessPercent(this, pct); sessionBrightness = pct },
             onRootChroot = { on ->
                 SessionPrefs.setRootChroot(this, on); rootChroot = on
                 if (on) Thread({ com.droiddeck.launcher.runtime.ChrootMode.prepare(this) }, "root-chroot").start()
@@ -2890,6 +2894,8 @@ class FrontEndActivity : ComponentActivity() {
         rootPrimeCapPercent = SessionPrefs.rootPrimeCapPercent(this)
         rootWattTargetTenths = SessionPrefs.rootWattTargetTenths(this)
         rootQuietBackground = SessionPrefs.rootQuietBackground(this)
+        rootSteamThrottle = SessionPrefs.rootSteamThrottle(this)
+        sessionBrightness = SessionPrefs.sessionBrightnessPercent(this)
         matchRefresh = SessionPrefs.matchRefreshToGame(this)
         prootNoSeccomp = SessionPrefs.prootNoSeccomp(this)
         prootFastPath = SessionPrefs.prootFastPath(this)

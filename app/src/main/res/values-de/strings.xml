@@ -630,10 +630,16 @@
     <string name="thermal_hot_title">Handy ist heiß</string>
     <string name="thermal_hot_text">Gehäuse %1$s °C bei %2$s W – Android drosselt jetzt den GPU-Takt. Ein niedrigeres FPS-Limit oder die sanfte Drosselung hält es kühler.</string>
     <string name="perf_root_watt">Watt-Ziel</string>
-    <string name="perf_root_watt_hint">Braucht Root. Zieht das Handy im Spiel mehr als das, sinkt die Bildrate in 5-FPS-Schritten und steigt wieder, sobald Luft ist. Ohne Kühler wird das Handy etwa 5–6 W los. Beim Laden ohne Wirkung.</string>
+    <string name="perf_root_watt_hint">Braucht Root. Zieht das Handy im Spiel mehr als das, sinkt die Bildrate schrittweise und steigt wieder, sobald Luft ist. Die Schritte sind die Raten, die der Bildschirm gleichmäßig zeigen kann (60, 48, 45, 40, 36, 30 bei 144 Hz). Ohne Kühler wird das Handy etwa 5–6 W los. Beim Laden ohne Wirkung.</string>
     <string name="perf_root_watt_value">%1$.1f W</string>
     <string name="perf_root_quiet">Hintergrund-Apps auf zwei Kerne</string>
     <string name="perf_root_quiet_hint">Braucht Root. Während der Sitzung bekommen Apps, die nicht im Vordergrund sind, nur zwei der langsameren Kerne; ihre Arbeit bleibt so von den Kernen des Spiels weg. Nach der Sitzung wieder wie vorher.</string>
+    <string name="perf_root_steam">Steam im Spiel drosseln</string>
+    <string name="perf_root_steam_hint">Braucht Root. Die Steam-Oberfläche arbeitet hinter dem Spiel weiter. Solange ein Spiel läuft, bekommt sie nur einen kleinen Anteil eines Kerns bei niedrigem Takt; Steam-Menü und Overlay öffnen weiterhin, nur etwas träger. Nach dem Spiel wieder wie vorher.</string>
+    <string name="perf_session_brightness">Bildschirmhelligkeit in der Sitzung</string>
+    <string name="perf_session_brightness_hint">Feste Helligkeit, solange eine Sitzung zu sehen ist; der Bildschirm ist eine der größeren Wärmequellen. Wirkt sofort und nur in der Sitzung.</string>
+    <string name="perf_session_brightness_system">System</string>
+    <string name="perf_session_brightness_value">%1$d %%</string>
     <string name="perf_root_soft">Sanfte Drosselung</string>
     <string name="perf_root_soft_hint">Braucht Root. Wird es warm (Gehäuse 41,5 °C – Android kappt bei ca. 43 °C), sinkt die Bildrate in 5-FPS-Schritten, statt dass Android den Takt schlagartig kappt; nach dem Abkühlen geht es wieder hoch. Ohne Live-Bildratenlimit (Sitzungen ohne gamescope) wird stattdessen die GPU-Grenze gesenkt.</string>
     <string name="perf_root_boost">CPU-Boost für Spiele</string>

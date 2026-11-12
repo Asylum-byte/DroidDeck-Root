@@ -28,7 +28,8 @@ internal object AgentRoot {
                 pick(request, "cpuCapPercent", RootPerfProfile.CPU_CAPS, old.cpuCapPercent),
                 pick(request, "boost", RootGameBoost.LEVELS, old.boost),
                 pick(request, "primeCapPercent", RootPerfProfile.PRIME_CAPS, old.primeCapPercent),
-                pick(request, "fpsLimit", RootGameProfiles.FPS_LIMITS, old.fpsLimit),
+                if (request.has("fpsLimit") && !request.isNull("fpsLimit") && request.optString("fpsLimit") != "global")
+                    fpsStep(request.getInt("fpsLimit")) else pick(request, "fpsLimit", RootGameProfiles.FPS_LIMITS, old.fpsLimit),
             )
             RootGameProfiles.set(context, scope, next)
             // A change to the running game's profile takes effect right away.
@@ -49,6 +50,20 @@ internal object AgentRoot {
                 if (v.has("chroot")) SessionPrefs.setRootChroot(context, v.getBoolean("chroot"))
                 if (v.has("quietBackground")) SessionPrefs.setRootQuietBackground(context, v.getBoolean("quietBackground"))
                 if (v.has("softThrottle")) SessionPrefs.setRootSoftThrottle(context, v.getBoolean("softThrottle"))
+                if (v.has("steamThrottle")) {
+                    SessionPrefs.setRootSteamThrottle(context, v.getBoolean("steamThrottle"))
+                    if (com.droiddeck.launcher.session.SessionState.running)
+                        com.droiddeck.launcher.session.RootSteamThrottle.game(context, RootGameProfiles.runningScope(context) != null)
+                }
+                if (v.has("brightness")) SessionPrefs.setSessionBrightnessPercent(context, checked(v.getInt("brightness"), SessionPrefs.SESSION_BRIGHTNESS))
+                if (v.has("shaderPrecache")) SessionPrefs.setShaderPrecache(context, v.getBoolean("shaderPrecache"))
+                // Core lists as "2,3,4" or "2-7"; an empty list means every core. They apply from the next session.
+                if (v.has("gameCpus")) SessionPrefs.setGameCpus(context, cores(v.getString("gameCpus")))
+                if (v.has("clientCpus")) {
+                    val list = cores(v.getString("clientCpus"))
+                    SessionPrefs.setClientCpus(context, list)
+                    SessionPrefs.setClientCpusOverride(context, list.isNotEmpty())
+                }
                 if (v.has("wattTarget")) {
                     val watt = v.getDouble("wattTarget")
                     if (watt != 0.0 && (watt < 3.0 || watt > 12.0)) throw AgentException("INVALID_REQUEST", "wattTarget must be 0 (off) or 3 to 12")
@@ -88,7 +103,7 @@ internal object AgentRoot {
                     primeCapPercent = if (request.has("primeCapPercent")) checked(request.getInt("primeCapPercent"), RootPerfProfile.PRIME_CAPS) else base.perf.primeCapPercent,
                 ),
                 if (request.has("boost")) checked(request.getInt("boost"), RootGameBoost.LEVELS) else base.boost,
-                if (request.has("fpsLimit")) checked(request.getInt("fpsLimit"), RootGameProfiles.FPS_LIMITS) else base.fpsLimit,
+                if (request.has("fpsLimit")) fpsStep(request.getInt("fpsLimit")) else base.fpsLimit,
             )
             // The tuner steps settings itself; the governor waits until the trial is over.
             com.droiddeck.launcher.session.RootSoftThrottle.paused = true
@@ -230,7 +245,14 @@ internal object AgentRoot {
                 .put("chroot", SessionPrefs.rootChroot(context))
                 .put("softThrottle", SessionPrefs.rootSoftThrottle(context))
                 .put("wattTarget", SessionPrefs.rootWattTargetTenths(context) / 10.0)
-                .put("quietBackground", SessionPrefs.rootQuietBackground(context)))
+                .put("quietBackground", SessionPrefs.rootQuietBackground(context))
+                .put("steamThrottle", SessionPrefs.rootSteamThrottle(context))
+                .put("brightness", SessionPrefs.sessionBrightnessPercent(context))
+                .put("gameCpus", SessionPrefs.gameCpus(context))
+                .put("clientCpus", if (SessionPrefs.clientCpusOverride(context)) SessionPrefs.clientCpus(context) else ""))
+            .put("steamThrottled", com.droiddeck.launcher.session.RootSteamThrottle.active)
+            .put("fpsRates", JSONArray(runCatching { com.droiddeck.launcher.session.LiveFpsLimit.achievable(context) }.getOrDefault(emptyList())))
+            .put("coreGhz", JSONArray(com.droiddeck.launcher.core.CpuCores.all.map { com.droiddeck.launcher.core.CpuCores.maxGhz(it) ?: 0.0 }))
             .put("thermalCapMhz", RootGameProfiles.thermalCapMhz)
             .put("liveFpsLimit", com.droiddeck.launcher.session.LiveFpsLimit.current)
             .put("governorFpsLimit", com.droiddeck.launcher.session.RootSoftThrottle.fpsLimit)
@@ -244,7 +266,8 @@ internal object AgentRoot {
                 .put("cpuCapPercent", JSONArray(RootPerfProfile.CPU_CAPS))
                 .put("primeCapPercent", JSONArray(RootPerfProfile.PRIME_CAPS))
                 .put("boost", JSONArray(RootGameBoost.LEVELS))
-                .put("fpsLimit", JSONArray(RootGameProfiles.FPS_LIMITS)))
+                .put("fpsLimit", JSONArray(RootGameProfiles.FPS_LIMITS))
+                .put("brightness", JSONArray(SessionPrefs.SESSION_BRIGHTNESS)))
     }
 
     private fun sensors(context: Context): JSONObject {
@@ -362,6 +385,27 @@ internal object AgentRoot {
         !request.has(key) -> old
         request.isNull(key) || request.optString(key) == "global" -> INHERIT
         else -> checked(request.getInt(key), allowed)
+    }
+
+    /** Older agents still ask for 35, 50 or 55: the limiter cannot hold those, so they become the step below. */
+    private fun fpsStep(value: Int): Int = when {
+        value <= 0 -> 0
+        value > 240 -> throw AgentException("INVALID_REQUEST", "fpsLimit $value is out of range")
+        else -> RootGameProfiles.FPS_LIMITS.filter { it in 1..value }.maxOrNull() ?: RootGameProfiles.FPS_LIMITS.first { it > 0 }
+    }
+
+    private fun cores(text: String): String {
+        val all = com.droiddeck.launcher.core.CpuCores.all
+        val picked = sortedSetOf<Int>()
+        text.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { part ->
+            val ends = part.split('-').map { it.trim().toIntOrNull() }
+            val from = ends.first()
+            val to = ends.last()
+            if (ends.size > 2 || from == null || to == null || from > to || from !in all || to !in all)
+                throw AgentException("INVALID_REQUEST", "cores must be a list like 2,3 or 2-7 within 0-${all.last()}")
+            picked.addAll(from..to)
+        }
+        return if (picked.size >= all.size) "" else picked.joinToString(",")
     }
 
     private fun checked(value: Int, allowed: List<Int>): Int =

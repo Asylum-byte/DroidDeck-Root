@@ -678,10 +678,16 @@
     <string name="thermal_hot_title">Phone is hot</string>
     <string name="thermal_hot_text">Skin %1$s °C at %2$s W – Android is cutting the GPU clock now. A lower FPS limit or the soft throttle keeps it cooler.</string>
     <string name="perf_root_watt">Power target</string>
-    <string name="perf_root_watt_hint">Needs root. While a game runs, the frame rate is lowered 5 FPS at a time when the phone draws more than this, and raised again when there is room. About 5–6 W is what the phone sheds without a cooler. Ignored while charging.</string>
+    <string name="perf_root_watt_hint">Needs root. While a game runs, the frame rate is lowered a step at a time when the phone draws more than this, and raised again when there is room. The steps are the rates the screen can show evenly (60, 48, 45, 40, 36, 30 on a 144 Hz screen). About 5–6 W is what the phone sheds without a cooler. Ignored while charging.</string>
     <string name="perf_root_watt_value">%1$.1f W</string>
     <string name="perf_root_quiet">Keep background apps on two cores</string>
     <string name="perf_root_quiet_hint">Needs root. During a session, apps that are not on screen only get two of the slower cores, so their work stays off the game\'s cores. Restored when the session ends.</string>
+    <string name="perf_root_steam">Slow Steam down while a game runs</string>
+    <string name="perf_root_steam_hint">Needs root. Steam\'s interface keeps working behind the game. While a game runs it gets a small share of one core at a low clock; the Steam menu and overlay still open, a little slower. Lifted when the game exits.</string>
+    <string name="perf_session_brightness">Screen brightness in a session</string>
+    <string name="perf_session_brightness_hint">A fixed brightness while a session is on screen; the screen is one of the larger heat sources. Applies at once, and only to the session.</string>
+    <string name="perf_session_brightness_system">System</string>
+    <string name="perf_session_brightness_value">%1$d %%</string>
     <string name="perf_root_soft">Soft throttle</string>
     <string name="perf_root_soft_hint">Needs root. As it warms (skin 41.5 °C – Android cuts at about 43 °C) the frame rate drops 5 FPS at a time instead of Android cutting the clock at once, and comes back once cooled. Without a live frame limit (sessions without gamescope) the GPU limit is lowered instead.</string>
     <string name="perf_root_boost">CPU boost for games</string>

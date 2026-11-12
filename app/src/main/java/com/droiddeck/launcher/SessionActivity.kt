@@ -2393,10 +2393,17 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
      * Skipped while frame generation runs, which needs the higher rate.
      */
     private fun gameDisplayFps(): Int {
-        val game = SessionState.gameFpsLimit
+        val game = SessionState.liveFpsLimit.takeIf { it > 0 } ?: SessionState.gameFpsLimit
         if (game <= 0 || !SessionPrefs.matchRefreshToGame(this) || mirrorRefreshLimit() > 0) return 0
         val frameGenOff = runCatching { com.droiddeck.launcher.gpu.FrameGen.mode(this).engine == com.droiddeck.launcher.gpu.FrameGen.Mode.OFF.engine }.getOrDefault(false)
         return if (frameGenOff) game else 0
+    }
+
+    /** A fixed, lower brightness for the session saves power in the panel; 0 leaves the system's alone. */
+    private fun applySessionBrightness() {
+        val percent = SessionPrefs.sessionBrightnessPercent(this)
+        val wanted = if (percent in 1..100) percent / 100f else android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        if (window.attributes.screenBrightness != wanted) window.attributes = window.attributes.apply { screenBrightness = wanted }
     }
 
     private fun applyOutputPacing() {
@@ -4724,6 +4731,8 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
     override fun onResume() {
         super.onResume()
         SessionState.onGameFpsLimit = { runOnUiThread { if (!isFinishing) applyOutputPacing() } }
+        SessionState.onSessionBrightness = { runOnUiThread { if (!isFinishing) applySessionBrightness() } }
+        applySessionBrightness()
         com.droiddeck.launcher.input.SystemKeyCapture.attach(this, { hasWindowFocus() && !appUiOwnsPointer() && CompositorHost.isStarted }) { event ->
             com.droiddeck.launcher.input.GuestKeys.send(event) { code, down -> sendGuestKey(code, down, 8) }
         }
@@ -5408,6 +5417,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     override fun onDestroy() {
         SessionState.onGameFpsLimit = null
+        SessionState.onSessionBrightness = null
         if (AgentGuest.readyListener === agentReadyListener) AgentGuest.readyListener = null
         com.droiddeck.launcher.input.HomeButtonShortcuts.detach(this)
         relativeMouseRequests.shutdownNow()

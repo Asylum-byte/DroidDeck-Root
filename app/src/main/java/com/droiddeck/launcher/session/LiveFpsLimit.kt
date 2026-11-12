@@ -14,6 +14,7 @@ import org.json.JSONObject
 object LiveFpsLimit {
     private const val TAG = "LiveFpsLimit"
     private const val CHECK_AFTER_MS = 9000L
+    private const val MIN_FPS = 24
 
     /** What was last set (0 = none). */
     @Volatile var current: Int = 0
@@ -23,9 +24,36 @@ object LiveFpsLimit {
     @Volatile var works: Boolean? = null
         private set
 
+    /**
+     * The rates gamescope's limiter can really hold. It only skips whole refreshes, so a limit has to divide
+     * the refresh rate evenly: at 120 Hz that is 60, 40 and 30, and a limit of 55 or 50 stays at 60. With the
+     * display following the game, every mode of the panel counts (144 Hz adds 72, 48 and 36, 90 Hz adds 45).
+     */
+    fun achievable(context: Context): List<Int> {
+        val rates = ArrayList<Float>()
+        SessionState.refreshHz.takeIf { it > 1f }?.let { rates += it }
+        if (SessionPrefs.matchRefreshToGame(context)) runCatching {
+            val display = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+                ?.getDisplay(android.view.Display.DEFAULT_DISPLAY) ?: return@runCatching
+            val now = display.mode
+            val cap = PerfMode.peakRefreshCap(context)
+            display.supportedModes.filter { it.physicalWidth == now.physicalWidth && it.physicalHeight == now.physicalHeight &&
+                it.refreshRate <= cap + 0.5f }.forEach { rates += it.refreshRate }
+        }
+        return rates.flatMap { hz -> (1..6).map { Math.round(hz / it) }.filter { it >= MIN_FPS && PerfMode.cadenceFits(hz, it) } }
+            .distinct().sortedDescending()
+    }
+
+    /** The nearest rate the limiter can hold that does not exceed [fps]; the lowest one when all are higher. */
+    fun snap(context: Context, fps: Int): Int {
+        if (fps <= 0) return 0
+        val rates = achievable(context)
+        return rates.filter { it <= fps + 1 }.maxOrNull() ?: rates.minOrNull() ?: fps
+    }
+
     @Synchronized
     fun set(context: Context, fps: Int): Boolean {
-        val value = fps.coerceIn(0, 240)
+        val value = snap(context, fps.coerceIn(0, 240))
         if (value == current) return true
         if (!SessionState.running) return false
         val before = fpsNow()
@@ -40,7 +68,12 @@ object LiveFpsLimit {
             return false
         }
         current = value
-        Log.i(TAG, "limit $value fps")
+        Log.i(TAG, "limit $value fps" + if (value != fps) " (asked for $fps)" else "")
+        // The display switches to a mode this limit divides, and gamescope's refresh follows it.
+        if (SessionState.liveFpsLimit != value) {
+            SessionState.liveFpsLimit = value
+            SessionState.onGameFpsLimit?.invoke()
+        }
         if (value > 0 && before != null && before > value + 3) verifyLater(value)
         return true
     }
@@ -48,6 +81,7 @@ object LiveFpsLimit {
     /** Session over: gamescope is gone, so only the bookkeeping resets. */
     fun reset() {
         current = 0
+        SessionState.liveFpsLimit = 0
     }
 
     private fun fpsNow(): Float? {

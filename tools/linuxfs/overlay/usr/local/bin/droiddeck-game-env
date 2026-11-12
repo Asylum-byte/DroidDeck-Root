@@ -1120,7 +1120,42 @@ def start(launch, launch_env, digest, after=None, diagnostic_app_id=None):
     return os.execvpe(launch[0], launch, launch_env)
 
 
-def announce_game(app_id):
+GAME_SCALE = "DROIDDECK_GAME_SCALE"
+
+
+def game_resolution(env):
+    """The size a game with its own scale renders at, from the session's size: (width, height) or None."""
+    text = env.get(GAME_SCALE, "").strip().replace(",", ".")
+    if not text:
+        return None
+    try:
+        scale = float(text)
+        width, height = int(env.get("BL_WIDTH", "0")), int(env.get("BL_HEIGHT", "0"))
+    except ValueError:
+        print("droiddeck-game-env: ignoring game scale %r" % text, file=sys.stderr)
+        return None
+    if not 1.0 < scale <= 4.0 or width < 320 or height < 200:
+        return None
+    return max(320, int(round(width / scale)) & ~1), max(200, int(round(height / scale)) & ~1)
+
+
+def set_game_mode(env, size):
+    """Asks gamescope for another size of the games' screen, the way Steam's own game resolution setting does."""
+    server = "1" if env.get("STEAM_MULTIPLE_XWAYLANDS") == "1" else "0"
+    value = "%s,%d,%d,0" % (server, size[0], size[1])
+    done = False
+    for display in dict.fromkeys(d for d in (env.get("DISPLAY"), env.get("STEAM_GAME_DISPLAY_0"), ":0") if d):
+        try:
+            done |= subprocess.run(
+                ["xprop", "-display", display, "-root", "-f", "GAMESCOPE_XWAYLAND_MODE_CONTROL", "32c",
+                 "-set", "GAMESCOPE_XWAYLAND_MODE_CONTROL", value],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return done
+
+
+def announce_game(app_id, env=None):
     """Tells the Android side which game runs, for its per-game root profiles; gone once the game exits."""
     run_dir = os.environ.get("XDG_RUNTIME_DIR", "")
     if not run_dir or not os.path.isdir(run_dir):
@@ -1133,6 +1168,14 @@ def announce_game(app_id):
         os.replace(staged, path)
     except OSError:
         return
+    scaled = None
+    if env is not None:
+        size = game_resolution(env)
+        if size and set_game_mode(env, size):
+            scaled = (int(env.get("BL_WIDTH", "0")), int(env.get("BL_HEIGHT", "0")))
+            print("droiddeck-game-env: game renders at %dx%d (scale %s)" % (size[0], size[1], env.get(GAME_SCALE)), file=sys.stderr)
+        elif size:
+            print("droiddeck-game-env: game scale not applied (gamescope did not take the size)", file=sys.stderr)
     launcher = os.getpid()
     try:
         if os.fork():
@@ -1159,6 +1202,8 @@ def announce_game(app_id):
                     os.unlink(path)
         except OSError:
             pass
+        if scaled:
+            set_game_mode(env, scaled)
     finally:
         os._exit(0)
 
@@ -1324,7 +1369,7 @@ def main():
         gl_default = gl_vsync(env)
         if waiting:
             game_images(env)
-            announce_game(app_id)
+            announce_game(app_id, effective_env)
         fixes = {}
         if waiting:
             command = skip_red_launcher(command)

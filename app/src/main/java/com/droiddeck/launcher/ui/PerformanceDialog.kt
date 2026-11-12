@@ -57,6 +57,8 @@ fun PerformancePage(
     rootPrimeCapPercent: Int,
     rootWattTargetTenths: Int,
     rootQuietBackground: Boolean,
+    rootSteamThrottle: Boolean,
+    sessionBrightness: Int,
     matchRefresh: Boolean,
     ramCapMb: Int,
     zramClient: Boolean,
@@ -90,6 +92,8 @@ fun PerformancePage(
     onRootPrimeCapPercent: (Int) -> Unit,
     onRootWattTargetTenths: (Int) -> Unit,
     onRootQuietBackground: (Boolean) -> Unit,
+    onRootSteamThrottle: (Boolean) -> Unit,
+    onSessionBrightness: (Int) -> Unit,
     onMatchRefresh: (Boolean) -> Unit,
     onRamCapMb: (Int) -> Unit,
     onZramClient: (Boolean) -> Unit,
@@ -204,6 +208,19 @@ fun PerformancePage(
                 host, "rootquiet", stringResource(R.string.perf_root_quiet),
                 stringResource(R.string.perf_root_quiet_hint),
                 rootQuietBackground, onChange = onRootQuietBackground,
+            )
+            ToggleRow(
+                host, "rootsteam", stringResource(R.string.perf_root_steam),
+                stringResource(R.string.perf_root_steam_hint),
+                rootSteamThrottle, onChange = onRootSteamThrottle,
+            )
+            ChoiceRow(
+                host, "sessionbrightness", stringResource(R.string.perf_session_brightness),
+                stringResource(R.string.perf_session_brightness_hint),
+                com.droiddeck.launcher.session.SessionPrefs.SESSION_BRIGHTNESS.map { pct ->
+                    pct to if (pct == 0) stringResource(R.string.perf_session_brightness_system) else stringResource(R.string.perf_session_brightness_value, pct)
+                },
+                sessionBrightness, onPick = onSessionBrightness,
             )
             ToggleRow(
                 host, "matchrefresh", stringResource(R.string.perf_match_refresh),

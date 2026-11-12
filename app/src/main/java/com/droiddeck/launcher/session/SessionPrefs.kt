@@ -804,6 +804,23 @@ object SessionPrefs {
         prefs(context).edit().putBoolean("rootQuietBackground", on).apply()
     }
 
+    /** While a game runs, Steam's web helper processes get a small CPU share and low clocks. */
+    fun rootSteamThrottle(context: Context): Boolean = prefs(context).getBoolean("rootSteamThrottle", false)
+
+    fun setRootSteamThrottle(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("rootSteamThrottle", on).apply()
+    }
+
+    val SESSION_BRIGHTNESS = listOf(0, 30, 40, 50, 60, 70, 80)
+
+    /** Screen brightness during a session in percent; 0 leaves the system's brightness alone. */
+    fun sessionBrightnessPercent(context: Context): Int = prefs(context).getInt("sessionBrightnessPercent", 0)
+
+    fun setSessionBrightnessPercent(context: Context, percent: Int) {
+        prefs(context).edit().putInt("sessionBrightnessPercent", percent.coerceIn(0, 100)).apply()
+        SessionState.onSessionBrightness?.invoke()
+    }
+
     fun rootSoftThrottle(context: Context): Boolean = prefs(context).getBoolean("rootSoftThrottle", false)
 
     fun setRootSoftThrottle(context: Context, on: Boolean) {

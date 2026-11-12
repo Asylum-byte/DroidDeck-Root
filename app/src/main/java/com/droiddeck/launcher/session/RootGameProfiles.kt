@@ -13,8 +13,11 @@ object RootGameProfiles {
     private const val GAME_FILE = "droiddeck-game"
     private const val POLL_MS = 2000L
 
-    /** Live frame limits a game profile can ask for (0 = none). */
-    val FPS_LIMITS = listOf(0, 30, 35, 40, 45, 50, 55, 60, 90, 120)
+    /**
+     * Live frame limits a game profile can ask for (0 = none): the rates that divide a common panel refresh
+     * rate. LiveFpsLimit snaps anything else down to the nearest rate this panel can hold.
+     */
+    val FPS_LIMITS = listOf(0, 30, 36, 40, 45, 48, 60, 72, 90, 120)
 
     data class Profile(val gpuCapMhz: Int = INHERIT, val cpuCapPercent: Int = INHERIT, val boost: Int = INHERIT,
                        val primeCapPercent: Int = INHERIT, val fpsLimit: Int = INHERIT) {
@@ -81,7 +84,7 @@ object RootGameProfiles {
         val held = RootSoftThrottle.fpsLimit
         val limit = if (held > 0 && (next.fpsLimit == 0 || held < next.fpsLimit)) held else next.fpsLimit
         val frames = if (limit != LiveFpsLimit.current) {
-            if (LiveFpsLimit.set(context, limit)) (if (limit > 0) ", frames <= $limit" else ", frame limit off") else ", frame limit not available"
+            if (LiveFpsLimit.set(context, limit)) (if (limit > 0) ", frames <= ${LiveFpsLimit.current}" else ", frame limit off") else ", frame limit not available"
         } else ""
         applied = next
         return "$perf, boost ${next.boost}$frames"
@@ -135,6 +138,7 @@ object RootGameProfiles {
                 if (scope != current) {
                     current = scope
                     publishFpsLimit(app, scope)
+                    runCatching { RootSteamThrottle.game(app, scope != null) }
                     val next = effective(app, scope)
                     if (next != applied) report("game profile ${scope ?: "none (global)"}: ${applyNow(app, next)}")
                     else Log.i(TAG, "game ${scope ?: "-"} uses the global root settings")
@@ -155,6 +159,7 @@ object RootGameProfiles {
         onDevice = null
         SessionState.gameFpsLimit = 0
         LiveFpsLimit.reset()
+        runCatching { RootSteamThrottle.stop() }
         thermalCapMhz = 0
         // The guest's cleanup child dies with the session, so the marker is removed here too.
         gameFile?.delete()

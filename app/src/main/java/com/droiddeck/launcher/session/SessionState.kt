@@ -158,7 +158,15 @@ object SessionState {
     @Volatile
     var gameFpsLimit: Int = 0
 
-    /** Called (from any thread) when gameFpsLimit changes. */
+    /** Live frame limit gamescope holds right now (game profile or governor); 0 = none. */
+    @Volatile
+    var liveFpsLimit: Int = 0
+
+    /** In-game screen brightness in percent (0 = the system's); set from the settings and the agent. */
+    @Volatile
+    var onSessionBrightness: (() -> Unit)? = null
+
+    /** Called (from any thread) when gameFpsLimit or liveFpsLimit changes. */
     @Volatile
     var onGameFpsLimit: (() -> Unit)? = null
 
