@@ -811,6 +811,13 @@ object SessionPrefs {
         prefs(context).edit().putBoolean("rootSteamThrottle", on).apply()
     }
 
+    /** A live frame limit of ours is still in Steam's settings (the session ended with it in place). */
+    fun liveLimitLeft(context: Context): Boolean = prefs(context).getBoolean("liveLimitLeft", false)
+
+    fun setLiveLimitLeft(context: Context, left: Boolean) {
+        if (liveLimitLeft(context) != left) prefs(context).edit().putBoolean("liveLimitLeft", left).apply()
+    }
+
     val SESSION_BRIGHTNESS = listOf(0, 30, 40, 50, 60, 70, 80)
 
     /** Screen brightness during a session in percent; 0 leaves the system's brightness alone. */

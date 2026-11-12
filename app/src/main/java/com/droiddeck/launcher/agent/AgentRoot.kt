@@ -110,6 +110,8 @@ internal object AgentRoot {
             JSONObject().put("scope", scope).put("applied", RootGameProfiles.applyNow(context, next))
                 .put("fpsLimit", com.droiddeck.launcher.session.LiveFpsLimit.current)
                 .put("fpsLimitWorks", com.droiddeck.launcher.session.LiveFpsLimit.works ?: JSONObject.NULL)
+                .put("fpsLimitVia", com.droiddeck.launcher.session.LiveFpsLimit.via ?: JSONObject.NULL)
+                .put("fpsLimitNote", com.droiddeck.launcher.session.LiveFpsLimit.note ?: JSONObject.NULL)
         }
         "trialEnd" -> {
             com.droiddeck.launcher.session.RootSoftThrottle.paused = false
@@ -257,6 +259,8 @@ internal object AgentRoot {
             .put("liveFpsLimit", com.droiddeck.launcher.session.LiveFpsLimit.current)
             .put("governorFpsLimit", com.droiddeck.launcher.session.RootSoftThrottle.fpsLimit)
             .put("fpsLimitWorks", com.droiddeck.launcher.session.LiveFpsLimit.works ?: JSONObject.NULL)
+            .put("fpsLimitVia", com.droiddeck.launcher.session.LiveFpsLimit.via ?: JSONObject.NULL)
+            .put("fpsLimitNote", com.droiddeck.launcher.session.LiveFpsLimit.note ?: JSONObject.NULL)
             .put("fanOn", RootPerfProfile.fanOn() ?: JSONObject.NULL)
             .put("gameFpsLimit", com.droiddeck.launcher.session.SessionState.gameFpsLimit)
             .put("refreshHz", com.droiddeck.launcher.session.SessionState.refreshHz.toDouble())

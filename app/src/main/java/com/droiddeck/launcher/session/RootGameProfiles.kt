@@ -146,6 +146,7 @@ object RootGameProfiles {
                 // A limit that could not be set at game start (guest agent not up yet) is tried again now and then.
                 if (++polls % 5 == 0) applied?.fpsLimit?.takeIf { it > 0 && LiveFpsLimit.current == 0 && RootSoftThrottle.fpsLimit == 0 }
                     ?.let { LiveFpsLimit.set(app, it) }
+                if (polls % 5 == 0) runCatching { LiveFpsLimit.settle(app) }
                 try { Thread.sleep(POLL_MS) } catch (_: InterruptedException) { break }
             }
         }, "root-game-profiles").apply { isDaemon = true; start() }
