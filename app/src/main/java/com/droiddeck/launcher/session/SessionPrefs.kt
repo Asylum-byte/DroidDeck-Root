@@ -253,6 +253,12 @@ object SessionPrefs {
         prefs(context).edit().putBoolean("railLabels", show).apply()
     }
 
+    fun agentTab(context: Context): Boolean = prefs(context).getBoolean("agentTab", false)
+
+    fun setAgentTab(context: Context, show: Boolean) {
+        prefs(context).edit().putBoolean("agentTab", show).apply()
+    }
+
     fun libraryShowUninstalled(context: Context): Boolean = prefs(context).getBoolean("libraryShowUninstalled", false)
 
     fun setLibraryShowUninstalled(context: Context, show: Boolean) {
@@ -852,6 +858,12 @@ object SessionPrefs {
         prefs(context).edit().putBoolean("rootFanMax", on).apply()
     }
 
+    fun nativeUserland(context: Context): Boolean = prefs(context).getBoolean("nativeUserland", false)
+
+    fun setNativeUserland(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("nativeUserland", on).apply()
+    }
+
     fun prootFastPath(context: Context): Boolean = prefs(context).getBoolean("prootFastPath", true)
 
     fun setProotFastPath(context: Context, on: Boolean) {
@@ -1140,6 +1152,13 @@ object SessionPrefs {
 
     fun setVacDiagnostics(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean("vac_diagnostics", on).apply()
+    }
+
+    fun buildWatermarkEnabled(context: Context): Boolean =
+        BuildWatermarkSetting.enabled(context)
+
+    fun setBuildWatermarkEnabled(context: Context, on: Boolean) {
+        BuildWatermarkSetting.setEnabled(context, on)
     }
 
     private fun resolutionCap(context: Context, mode: String): Int = prefs(context).getInt("resolutionCap.$mode", 720)
