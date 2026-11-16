@@ -51,12 +51,17 @@ jobs:
           [ ${#apks[@]} = 1 ] && [ -f "${apks[0]}" ] || { echo "::error::expected one apk"; exit 1; }
           P=com.droiddeck.launcher
           pkg=$TARGET
-          python3 tools/release/axml_rename.py "${apks[0]}" renamed.apk \
-            "$P=$pkg" "$P.androidx-startup=$pkg.androidx-startup" "$P.logs=$pkg.logs" \
-            "$P.pairingguide=$pkg.pairingguide" "$P.pin=$pkg.pin" \
-            "$P.documents=$pkg.documents" "$P.home=$pkg.home" "$P.agent=$pkg.agent" \
-            "$P.vr_recovery=$pkg.vr_recovery" "$P.dualscreen=$pkg.dualscreen" "$P.typing=$pkg.typing" \
-            "$P.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION=$pkg.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          # Upstream keeps adding authorities and task names (.devicecode was the last one): take them from
+          # the manifest itself instead of a list that goes stale with every sync.
+          mapfile -t found < <("$BUILD_TOOLS/aapt" dump xmltree "${apks[0]}" AndroidManifest.xml \
+            | grep -E 'android:(authorities|taskAffinity)' | grep -oE "\"$P\.[A-Za-z0-9_.-]+\"" | tr -d '"' | sort -u)
+          renames=("$P=$pkg" "$P.androidx-startup=$pkg.androidx-startup"
+            "$P.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION=$pkg.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+          for name in "${found[@]}"; do
+            [ "$name" = "$P.androidx-startup" ] || renames+=("$name=$pkg${name#"$P"}")
+          done
+          echo "renaming: ${renames[*]}"
+          python3 tools/release/axml_rename.py "${apks[0]}" renamed.apk "${renames[@]}"
           got=$("$BUILD_TOOLS/aapt" dump badging renamed.apk | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
           [ "$got" = "$pkg" ] || { echo "::error::apk says package '$got'"; exit 1; }
           if "$BUILD_TOOLS/aapt" dump xmltree renamed.apk AndroidManifest.xml | grep -E 'android:(authorities|taskAffinity)' | grep -F "\"$P."; then
