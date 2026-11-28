@@ -755,7 +755,18 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p app/build
-          ./gradlew testReleaseUnitTest --console=plain --info --stacktrace -Drobolectric.logging=stderr -PndkVersion="$NDK_VERSION" 2>&1 | tee app/build/unit-tests.log
+          # Root fork: Maven Central often answers this fork's cold runs with 429, which failed the tests and so left
+          # no APK for the Genshin variant. A run that died only on downloads is tried again, at most twice.
+          for attempt in 1 2 3; do
+            if ./gradlew testReleaseUnitTest --console=plain --info --stacktrace -Drobolectric.logging=stderr -PndkVersion="$NDK_VERSION" 2>&1 | tee app/build/unit-tests.log; then
+              exit 0
+            fi
+            if [ "$attempt" = 3 ] || ! grep -qE '429 Too Many Requests|Failed to fetch maven artifact|Could not download .*robolectric' app/build/unit-tests.log; then
+              exit 1
+            fi
+            echo "::warning::unit tests hit a download error (attempt $attempt); trying again in 90 s"
+            sleep 90
+          done
 
       # actions/cache only saves when the job succeeds, so a run whose tests died on a Maven 429 never filled the cache.
       # Save the complete jars even after a failed test step, when this run added some; a partial download is dropped first.
